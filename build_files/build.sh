@@ -107,6 +107,7 @@ fi
 
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
+    calls
     chromium # for WebUSB
     feedbackd # for gnome-calls
     firefox # as RPM for GSConnect

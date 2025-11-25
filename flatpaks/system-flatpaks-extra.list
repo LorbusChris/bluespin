@@ -32,7 +32,7 @@ app/org.fedoraproject.MediaWriter
 app/org.freecad.FreeCAD
 app/org.gimp.GIMP
 app/org.gnome.Boxes
-app/org.gnome.Calls
+app/org.gnome.Fractal
 app/org.gnome.gitlab.somas.Apostrophe
 app/org.gnome.gitlab.YaLTeR.VideoTrimmer
 app/org.gnome.Podcasts
