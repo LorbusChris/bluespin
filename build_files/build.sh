@@ -107,7 +107,7 @@ fi
 
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
-    calls
+    #calls
     chromium # for WebUSB
     feedbackd # for gnome-calls
     firefox # as RPM for GSConnect
@@ -140,6 +140,10 @@ ADDITIONAL_FEDORA_PACKAGES=(
 
 dnf -y install --skip-unavailable \
     "${ADDITIONAL_FEDORA_PACKAGES[@]}"
+
+dnf -y copr enable lorbus/calls
+dnf -y install calls
+dnf -y copr disable lorbus/calls
 
 # Cleanup
 dnf clean all
