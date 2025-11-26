@@ -1,5 +1,5 @@
 ---
-name: Build Bluefin Surface container image
+name: Build Bluespin container image
 on:
   pull_request:
     branches:
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_DESC: "Bluefin Image for Surface Devices"
+  IMAGE_DESC: "Bluespin"
   IMAGE_KEYWORDS: "bootc,ublue,universal-blue,bluefin,surface"
   IMAGE_NAME: "${{ github.event.repository.name }}"  # output image name, usually same as repo name
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit

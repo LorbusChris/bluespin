@@ -111,6 +111,7 @@ ADDITIONAL_FEDORA_PACKAGES=(
     chromium # for WebUSB
     feedbackd # for gnome-calls
     firefox # as RPM for GSConnect
+    git-credential-libsecret
     gdb
     gnome-network-displays
     libcamera-qcam
