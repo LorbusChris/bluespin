@@ -146,6 +146,11 @@ dnf -y copr enable lorbus/calls
 dnf -y install calls
 dnf -y copr disable lorbus/calls
 
+# Use systemd devel build
+curl -Lo /etc/yum.repos.d/system_systemd.repo https://download.opensuse.org/repositories/system:/systemd/Fedora_43/system:systemd.repo
+dnf config-manager setopt system_systemd.enabled=0
+dnf -y update --repo="system_systemd" systemd 
+
 # Cleanup
 dnf clean all
 
