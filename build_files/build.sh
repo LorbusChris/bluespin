@@ -112,6 +112,7 @@ ADDITIONAL_FEDORA_PACKAGES=(
     feedbackd # for gnome-calls
     firefox # as RPM for GSConnect
     git-credential-libsecret
+    git-evtag
     gdb
     #gnome-network-displays
     libcamera-qcam
