@@ -86,6 +86,8 @@ ADDITIONAL_FEDORA_PACKAGES=(
     #calls
     chromium # for WebUSB
     feedbackd # for gnome-calls
+    fedora-packager
+    fedora-packager-kerberos
     firefox # as RPM for GSConnect
     git-credential-libsecret
     git-evtag
