@@ -1,0 +1,12 @@
+# Flatpaks for DX mode on Bluefin
+flatpak "ca.desrt.dconf-editor"
+flatpak "cc.arduino.IDE2"
+flatpak "de.leopoldluley.Clapgrep"
+flatpak "io.github.getnf.embellish"
+flatpak "io.github.ronniedroid.concessio"
+flatpak "io.podman_desktop.PodmanDesktop"
+flatpak "me.iepure.devtoolbox"
+flatpak "org.freedesktop.Bustle"
+flatpak "org.gnome.Builder"
+flatpak "org.gnome.dspy"
+flatpak "org.pipewire.Helvum"

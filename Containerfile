@@ -3,7 +3,7 @@ ARG IMAGE_NAME="${IMAGE_NAME:-bluespin}"
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
 COPY /build_files /build_files
-COPY /flatpaks /flatpaks
+COPY /files /files
 
 # Base Image
 FROM ghcr.io/ublue-os/bluefin-dx:latest
