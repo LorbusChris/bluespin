@@ -13,33 +13,30 @@ if [[ -f /usr/share/applications/org.gnome.SystemMonitor.desktop ]]; then
     sed -i '/^Hidden=true/d' /usr/share/applications/org.gnome.SystemMonitor.desktop
 fi
 
+dnf -y remove \
+    gnome-tweaks
+
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
-    #calls
+    nextcloud-client-nautilus
+    papers # for mDNS printer discovery
+    simple-scan # for mDNS printer discovery
+    #thunderbird # for mDNS printer discovery
+    firefox # for GSConnect and mDNS printer discovery
     chromium # for WebUSB
-    feedbackd # for gnome-calls
     fedora-packager
     fedora-packager-kerberos
-    firefox # as RPM for GSConnect
     git-credential-libsecret
     git-evtag
     gdb
-    nodejs
-    yarnpkg
-    npx
-    pipx
-    meson
-    ninja
-    gettext
-    rust
+    pmbootstrap
+    wireshark
     dvb-tools
+    v4l-utils
+    #calls
+    feedbackd # for gnome-calls
     #gnome-network-displays
     #gnome-shell-extension-network-displays
-    libcamera-qcam
-    nextcloud-client-nautilus
-    pmbootstrap
-    v4l-utils
-    wireshark
     gnome-shell-extension-appindicator
     #gnome-shell-extension-apps-menu
     gnome-shell-extension-auto-move-windows
@@ -74,10 +71,6 @@ dnf -y copr disable lorbus/network-displays
 dnf -y copr enable lorbus/theia
 dnf -y install theia-ide
 dnf -y copr disable lorbus/theia
-
-dnf -y copr enable lorbus/NetworkManager
-dnf -y update NetworkManager
-dnf -y copr disable lorbus/NetworkManager
 
 # Surface Variant
 if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
