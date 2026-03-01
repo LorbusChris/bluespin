@@ -56,7 +56,7 @@ dnf -y copr disable lorbus/network-displays
 # DX Variant
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
     dnf -y install --skip-unavailable \
-        chromium # for WebUSB \
+        chromium \
         fedora-packager \
         fedora-packager-kerberos \
         gdb \
@@ -64,8 +64,7 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
         wireshark \
         dvb-tools \
         v4l-utils \
-        #calls \
-        feedbackd # for gnome-calls \
+        feedbackd \
         nextcloud-client-nautilus
 
     dnf -y copr enable lorbus/calls
