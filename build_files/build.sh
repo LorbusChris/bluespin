@@ -18,23 +18,12 @@ dnf -y remove \
 
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
-    nextcloud-client-nautilus
     papers # for mDNS printer discovery
     simple-scan # for mDNS printer discovery
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
-    chromium # for WebUSB
-    fedora-packager
-    fedora-packager-kerberos
     git-credential-libsecret
     git-evtag
-    gdb
-    pmbootstrap
-    wireshark
-    dvb-tools
-    v4l-utils
-    #calls
-    feedbackd # for gnome-calls
     #gnome-network-displays
     #gnome-shell-extension-network-displays
     gnome-shell-extension-appindicator
@@ -60,17 +49,33 @@ ADDITIONAL_FEDORA_PACKAGES=(
 dnf -y install --skip-unavailable \
     "${ADDITIONAL_FEDORA_PACKAGES[@]}"
 
-dnf -y copr enable lorbus/calls
-dnf -y install calls
-dnf -y copr disable lorbus/calls
-
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
 
-dnf -y copr enable lorbus/theia
-dnf -y install theia-ide
-dnf -y copr disable lorbus/theia
+# DX Variant
+if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
+    dnf -y install --skip-unavailable \
+        chromium # for WebUSB \
+        fedora-packager \
+        fedora-packager-kerberos \
+        gdb \
+        pmbootstrap \
+        wireshark \
+        dvb-tools \
+        v4l-utils \
+        #calls \
+        feedbackd # for gnome-calls \
+        nextcloud-client-nautilus
+
+    dnf -y copr enable lorbus/calls
+    dnf -y install calls
+    dnf -y copr disable lorbus/calls
+
+    dnf -y copr enable lorbus/theia
+    dnf -y install theia-ide
+    dnf -y copr disable lorbus/theia
+fi
 
 # Surface Variant
 if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
