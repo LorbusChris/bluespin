@@ -65,7 +65,8 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
         dvb-tools \
         v4l-utils \
         feedbackd \
-        nextcloud-client-nautilus
+        nextcloud-client-nautilus \
+        tio
 
     dnf -y copr enable lorbus/calls
     dnf -y install calls
