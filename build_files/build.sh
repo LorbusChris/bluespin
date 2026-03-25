@@ -22,27 +22,34 @@ ADDITIONAL_FEDORA_PACKAGES=(
     simple-scan # for mDNS printer discovery
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
-    git-credential-libsecret
-    git-evtag
-    #gnome-network-displays
-    #gnome-shell-extension-network-displays
+
+    # Custom GNOME Shell Extensions
     gnome-shell-extension-appindicator
-    #gnome-shell-extension-apps-menu
-    gnome-shell-extension-auto-move-windows
+    gnome-shell-extension-blur-my-shell
     gnome-shell-extension-caffeine
     gnome-shell-extension-dash-to-dock
+    gnome-shell-extension-gsconnect
+    #gnome-shell-extension-just-perfection
+    #gnome-shell-extension-nekotorch
+    #gnome-shell-extension-network-displays
+    gnome-shell-extension-screen-autorotate
+    gnome-shell-extension-weather-or-not
+
+    # Default GNOME Shell Extensions
+    # https://src.fedoraproject.org/rpms/gnome-shell-extensions
+    gnome-shell-extension-apps-menu
+    gnome-shell-extension-auto-move-windows
     gnome-shell-extension-drive-menu
-    #gnome-shell-extension-gsconnect
-    #gnome-shell-extension-launch-new-instance
+    gnome-shell-extension-launch-new-instance
     gnome-shell-extension-light-style
     gnome-shell-extension-native-window-placement
-    #gnome-shell-extension-places-menu
+    gnome-shell-extension-places-menu
     gnome-shell-extension-screenshot-window-sizer
     gnome-shell-extension-status-icons
     gnome-shell-extension-system-monitor
     gnome-shell-extension-user-theme
+    gnome-shell-extension-window-list
     gnome-shell-extension-windowsNavigator
-    #gnome-shell-extension-window-list
     gnome-shell-extension-workspace-indicator
 )
 
@@ -60,6 +67,8 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
         fedora-packager \
         fedora-packager-kerberos \
         gdb \
+        git-credential-libsecret \
+        git-evtag \
         pmbootstrap \
         wireshark \
         dvb-tools \
@@ -71,10 +80,6 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
     dnf -y copr enable lorbus/calls
     dnf -y install calls
     dnf -y copr disable lorbus/calls
-
-    dnf -y copr enable lorbus/theia
-    dnf -y install theia-ide
-    dnf -y copr disable lorbus/theia
 fi
 
 # Surface Variant
