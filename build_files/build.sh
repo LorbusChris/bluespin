@@ -22,6 +22,7 @@ ADDITIONAL_FEDORA_PACKAGES=(
     simple-scan # for mDNS printer discovery
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
+    mozilla-openh264
 
     # Custom GNOME Shell Extensions
     gnome-shell-extension-appindicator
