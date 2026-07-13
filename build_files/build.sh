@@ -82,17 +82,9 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
     dnf -y install calls
     dnf -y copr disable lorbus/calls
 
-    # PipeWire with AirPlay 2 (RAOP) support, from the lorbus/misc COPR.
-    # Replaces the base pipewire with the 1.7.0 snapshot; the 'pipewire*' glob
-    # also upgrades the already-installed pipewire-config-raop (which enables
-    # RAOP discovery). The COPR must have a fedora-44 chroot matching the
-    # bluefin-dx:latest base.
-    dnf -y copr enable lorbus/misc
-    dnf -y upgrade 'pipewire*'
-    dnf -y copr disable lorbus/misc
-    # dnf upgrade is a no-op (exit 0) if the COPR lacks an fc44 build, which
-    # would silently ship the base pipewire — fail loudly instead.
-    rpm -q pipewire | grep -q git || { echo "ERROR: lorbus/misc pipewire not installed"; exit 1; }
+    dnf -y copr enable lorbus/NetworkManager
+    dnf -y upgrade 'NetworkManager*'
+    dnf -y copr disable lorbus/NetworkManager
 fi
 
 # Surface Variant
