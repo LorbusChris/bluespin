@@ -6,7 +6,7 @@ COPY /build_files /build_files
 COPY /files /files
 
 # Base Image
-FROM ghcr.io/ublue-os/bluefin-dx:latest
+FROM ghcr.io/ublue-os/bluefin-dx:latest@sha256:ed3d1969bd627cd3c85e441e2d266fb4b926ef620a8fd50a4648d425866c0d80
 ## Other possible base images include:
 # ghcr.io/ublue-os/bazzite:latest
 # quay.io/fedora/fedora-bootc:latest
