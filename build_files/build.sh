@@ -5,6 +5,35 @@ set -xeuo pipefail
 install -Dm0644 -t /etc/ublue-os/ /ctx/files/etc/ublue-os/*.list
 install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
 
+# Enforce sigstore verification for our own images on updates. The bluefin-dx
+# base ships ublue-os-signing, whose policy.json covers ghcr.io/ublue-os but
+# falls through to insecureAcceptAnything for everything else, so bootc updates
+# from ghcr.io/lorbuschris would otherwise be pulled unverified. Extend that
+# policy rather than replace it.
+install -Dm0644 /ctx/cosign.pub /etc/pki/containers/lorbuschris.pub
+install -d /etc/containers/registries.d
+tee /etc/containers/registries.d/lorbuschris.yaml << 'EOF'
+docker:
+  ghcr.io/lorbuschris:
+    use-sigstore-attachments: true
+EOF
+# ublue-os-signing installs policy.json under /usr/etc; containers-common may
+# also ship one under /etc. Patch whichever exist, and fail if neither does.
+policy_patched=0
+for policy in /etc/containers/policy.json /usr/etc/containers/policy.json; do
+    [[ -f "$policy" ]] || continue
+    policy_tmp="$(mktemp)"
+    jq '.transports.docker["ghcr.io/lorbuschris"] = [{
+            "type": "sigstoreSigned",
+            "keyPath": "/etc/pki/containers/lorbuschris.pub",
+            "signedIdentity": {"type": "matchRepository"}
+        }]' "$policy" > "$policy_tmp"
+    install -m0644 "$policy_tmp" "$policy"
+    rm -f "$policy_tmp"
+    policy_patched=1
+done
+[[ "$policy_patched" -eq 1 ]]
+
 # Bluefin fixups
 if [[ -f /usr/share/applications/gnome-system-monitor.desktop ]]; then
     sed -i '/^Hidden=true/d' /usr/share/applications/gnome-system-monitor.desktop
