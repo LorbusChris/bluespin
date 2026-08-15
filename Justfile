@@ -159,13 +159,18 @@ ostree-rechunk $target_image=image_name $tag=default_tag:
 
     RPM_OSTREE_OUTPUT_DIR="$(mktemp -d ./"${target_image##*/}"_rpm-ostree_XXXXXX)"
 
-    trap 'rm -rf "${RPM_OSTREE_OUTPUT_DIR}"' EXIT
+    # rpm-ostree needs scratch space under /var/tmp, which our image cleanup
+    # strips; mount host scratch space there instead of relying on the image
+    RPM_OSTREE_TMP_DIR="$(mktemp -d ./"${target_image##*/}"_rpm-ostree-tmp_XXXXXX)"
+
+    trap 'rm -rf "${RPM_OSTREE_OUTPUT_DIR}" "${RPM_OSTREE_TMP_DIR}"' EXIT
 
     podman run --rm \
       --pull=never \
       --mount=type=image,src="${target_image}:${tag}",target=/rpm-ostree \
       --privileged \
       -v "${RPM_OSTREE_OUTPUT_DIR}:/run/out:Z" \
+      -v "${RPM_OSTREE_TMP_DIR}:/var/tmp:Z" \
       --entrypoint /usr/bin/rpm-ostree \
       "${RPM_OSTREE_CHUNKER_IMAGE}" \
       compose build-chunked-oci \
