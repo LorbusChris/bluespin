@@ -6,13 +6,13 @@
 
   "rebaseWhen": "never",
 
-  // Keep the pinned bootc-image-builder digest in bluespin.env up to date
+  // Keep pinned image digests in bluespin.env (BIB_IMAGE, CHUNKAH_IMAGE, ...) up to date
   "customManagers": [
     {
       "customType": "regex",
       "fileMatch": ["^bluespin\\.env$"],
       "matchStrings": [
-        "BIB_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+        "[A-Z_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ],
       "datasourceTemplate": "docker"
     }

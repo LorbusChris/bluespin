@@ -9,6 +9,7 @@ export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
 export bib_image := env_var("BIB_IMAGE")
+export chunkah_image := env_var("CHUNKAH_IMAGE")
 
 alias build-vm := build-qcow2
 alias rebuild-vm := rebuild-qcow2
@@ -119,7 +120,6 @@ rechunk $target_image=image_name $tag=default_tag:
     #!/usr/bin/env bash
     set -xeuo pipefail
 
-    # TODO: pin chunkah image to hash once mature enough
     # You may run into space issues on github runners as we are making a
     # complete copy of the image, which likely has no shared layers, unless your
     # base image is also using chunkah
@@ -136,7 +136,7 @@ rechunk $target_image=image_name $tag=default_tag:
       --mount=type=image,src="${target_image}:${tag}",target=/chunkah \
       -v "${CHUNKAH_CONFIG_FILE}:/chunkah-config.json:ro,Z" \
       -v "${CHUNKAH_OUTPUT_DIR}:/run/out:Z" \
-      quay.io/coreos/chunkah:latest \
+      "${chunkah_image}" \
       build \
       --verbose \
       --compressed \
