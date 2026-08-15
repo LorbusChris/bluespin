@@ -6,6 +6,18 @@
 
   "rebaseWhen": "never",
 
+  // Keep the pinned bootc-image-builder digest in bluespin.env up to date
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^bluespin\\.env$"],
+      "matchStrings": [
+        "BIB_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+
   "packageRules": [
     {
       "automerge": true,

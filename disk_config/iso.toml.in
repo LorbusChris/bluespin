@@ -1,7 +1,10 @@
+# Template for the Anaconda installer ISO config. The Justfile's build-iso
+# recipe substitutes @IMAGE_NAME@ with the variant being built (bluespin,
+# bluespin-dx, bluespin-surface) and writes disk_config/iso.generated.toml.
 [customizations.installer.kickstart]
 contents = """
 %post
-bootc switch --mutate-in-place --transport registry ghcr.io/lorbuschris/bluespin:latest
+bootc switch --mutate-in-place --transport registry ghcr.io/lorbuschris/@IMAGE_NAME@:latest
 %end
 """
 
