@@ -1,9 +1,55 @@
 #!/bin/bash
 set -xeuo pipefail
 
-# Copy ISO list for `install-system-flatpaks`
-install -Dm0644 -t /etc/ublue-os/ /ctx/files/etc/ublue-os/*.list
+# Flatpaks are installed by flatpak-preinstall.service (enabled in the bluefin
+# base) from /usr/share/flatpak/preinstall.d. Note: preinstall tracks these
+# entries, so removing one later uninstalls the app from users' systems.
+install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
+    /ctx/files/usr/share/flatpak/preinstall.d/bluespin.preinstall \
+    /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
 install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
+
+# Remove the base's brew-preinstall mechanism (a user service that installs
+# Homebrew packages from the network at first login). Its CLI tools are baked
+# as RPMs below instead; bluefinctl (manages bluefin channels/rebases that
+# don't apply to this image) and the chairlift cask are dropped entirely.
+rm -f /usr/share/ublue-os/homebrew/preinstall.d/*.Brewfile \
+    /usr/lib/systemd/user/brew-preinstall.service \
+    /usr/lib/systemd/user-preset/01-brew-preinstall.preset
+
+# The base's dx flatpak Brewfile is superseded by our preinstall.d set; our
+# own system-flatpaks.Brewfile ships as a stub that masks the base's copy so
+# `ujust install-system-flatpaks` stays a working no-op
+rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
+
+# Enforce sigstore verification for our own images on updates. The bluefin-dx
+# base ships ublue-os-signing, whose policy.json covers ghcr.io/ublue-os but
+# falls through to insecureAcceptAnything for everything else, so bootc updates
+# from ghcr.io/lorbuschris would otherwise be pulled unverified. Extend that
+# policy rather than replace it.
+install -Dm0644 /ctx/cosign.pub /etc/pki/containers/lorbuschris.pub
+install -d /etc/containers/registries.d
+tee /etc/containers/registries.d/lorbuschris.yaml << 'EOF'
+docker:
+  ghcr.io/lorbuschris:
+    use-sigstore-attachments: true
+EOF
+# ublue-os-signing installs policy.json under /usr/etc; containers-common may
+# also ship one under /etc. Patch whichever exist, and fail if neither does.
+policy_patched=0
+for policy in /etc/containers/policy.json /usr/etc/containers/policy.json; do
+    [[ -f "$policy" ]] || continue
+    policy_tmp="$(mktemp)"
+    jq '.transports.docker["ghcr.io/lorbuschris"] = [{
+            "type": "sigstoreSigned",
+            "keyPath": "/etc/pki/containers/lorbuschris.pub",
+            "signedIdentity": {"type": "matchRepository"}
+        }]' "$policy" > "$policy_tmp"
+    install -m0644 "$policy_tmp" "$policy"
+    rm -f "$policy_tmp"
+    policy_patched=1
+done
+[[ "$policy_patched" -eq 1 ]]
 
 # Bluefin fixups
 if [[ -f /usr/share/applications/gnome-system-monitor.desktop ]]; then
@@ -23,6 +69,18 @@ ADDITIONAL_FEDORA_PACKAGES=(
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
     mozilla-openh264
+
+    # RPM equivalents of the removed brew-preinstall system-cli set
+    fzf
+    glow
+    htop
+    rclone
+    restic
+    smartmontools
+    squashfs-tools
+    tcpdump
+    tmux
+    yubikey-manager
 
     # Custom GNOME Shell Extensions
     gnome-shell-extension-appindicator
@@ -61,8 +119,17 @@ dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
 
+# starship (bluefin's default shell prompt, previously brew-preinstalled) has
+# no Fedora package; bake it from the atim/starship COPR
+dnf -y copr enable atim/starship
+dnf -y install starship
+dnf -y copr disable atim/starship
+
 # DX Variant
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
+    install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
+        /ctx/files/usr/share/flatpak/preinstall.d/bluespin-dx.preinstall
+
     dnf -y install --skip-unavailable \
         fedora-packager \
         fedora-packager-kerberos \

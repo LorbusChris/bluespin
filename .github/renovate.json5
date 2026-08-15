@@ -6,6 +6,18 @@
 
   "rebaseWhen": "never",
 
+  // Keep pinned image digests in bluespin.env (BIB_IMAGE, CHUNKAH_IMAGE, ...) up to date
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^bluespin\\.env$"],
+      "matchStrings": [
+        "[A-Z_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+
   "packageRules": [
     {
       "automerge": true,

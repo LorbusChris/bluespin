@@ -1,0 +1,43 @@
+# Generated from the former system-flatpaks-dx.list.
+# NOTE: flatpak-preinstall tracks these entries; removing an entry later
+# uninstalls that app from users' systems. Remove deliberately.
+
+[Flatpak Preinstall ca.desrt.dconf-editor]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall cc.arduino.IDE2]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall de.leopoldluley.Clapgrep]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall io.github.getnf.embellish]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall io.github.ronniedroid.concessio]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall io.podman_desktop.PodmanDesktop]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall me.iepure.devtoolbox]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.freedesktop.Bustle]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.gnome.dspy]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.pipewire.Helvum]
+Branch=stable
+IsRuntime=false
