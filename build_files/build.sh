@@ -57,19 +57,13 @@ ADDITIONAL_FEDORA_PACKAGES=(
 dnf -y install --skip-unavailable \
     "${ADDITIONAL_FEDORA_PACKAGES[@]}"
 
-dnf -y copr enable lorbus/NetworkManager
-dnf -y upgrade 'NetworkManager*'
-
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
-
-dnf -y copr disable lorbus/NetworkManager
 dnf -y copr disable lorbus/network-displays
 
 # DX Variant
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
     dnf -y install --skip-unavailable \
-        chromium \
         fedora-packager \
         fedora-packager-kerberos \
         gdb \
