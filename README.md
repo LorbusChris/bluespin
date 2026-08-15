@@ -29,6 +29,41 @@ signature-verified on-device. To verify manually:
 cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 ```
 
+## Flatpak curation
+
+Flatpaks are shipped as [flatpak preinstall](https://docs.flatpak.org/en/latest/flatpak-command-reference.html#flatpak-preinstall)
+entries under [files/usr/share/flatpak/preinstall.d/](files/usr/share/flatpak/preinstall.d/)
+(common + extra on all variants, dx apps on `bluespin-dx` only) — the same
+mechanism current Bluefin uses. The optional `full-desktop` set installs via
+`ujust bbrew` from [full-desktop.Brewfile](files/usr/share/ublue-os/homebrew/full-desktop.Brewfile).
+
+The set was forked from Bluefin's defaults (Nov 2025, commit `1b24cf5`) and is
+curated independently. Current Bluefin preinstalls only Bazaar, so the
+preinstall set here is purely additive on top of the base. Bluefin's former
+defaults live on in its `system-flatpaks*.Brewfile` files; since bluespin
+preinstalls everything it wants, it ships `system-flatpaks.Brewfile` only as
+an empty stub (masking the base's copy so `ujust install-system-flatpaks`
+stays a working no-op), removes the base's dx Brewfile in the build, and
+keeps `full-desktop.Brewfile` as the single opt-in catalog. Deliberately
+excluded from Bluefin's current sets:
+
+- `org.mozilla.firefox` — Firefox is installed as an RPM instead
+- `org.gnome.Papers`, `org.gnome.SimpleScan` — installed as RPMs instead
+- `io.missioncenter.MissionCenter`
+
+Because of the overwrite, new Bluefin Brewfile additions do not appear here
+automatically — diff against
+`projectbluefin/common:system_files/bluefin/usr/share/ublue-os/homebrew/`
+occasionally. The base's `brew-preinstall` mechanism (network-installing CLI
+tools at first login) is removed in the build; its `system-cli` tools are
+baked as RPMs instead, while `bluefinctl` and the `chairlift` cask are
+dropped.
+
+Note that removing a preinstall entry uninstalls the app from users'
+systems; apps installed before the preinstall migration (or by the user) are
+never removed automatically. The `Validate Flatpaks` workflow checks every
+entry against Flathub on PRs, and fails on end-of-life or renamed apps.
+
 ## Building locally
 
 Requires `just` and rootful `podman`.

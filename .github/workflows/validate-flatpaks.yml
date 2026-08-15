@@ -1,0 +1,71 @@
+---
+name: Validate Flatpaks
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - "files/usr/share/flatpak/preinstall.d/**"
+      - "files/usr/share/ublue-os/homebrew/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Flathub
+        shell: bash
+        run: |
+          sudo apt install -y flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Validate flatpak preinstall files
+        shell: bash
+        run: |
+          set -euo pipefail
+          find files/usr/share/flatpak/preinstall.d -iname '*.preinstall' -print0 | \
+            while IFS= read -r -d '' flatpaks_file; do
+              echo "::group:: ===$(basename "$flatpaks_file")==="
+              while IFS= read -r app_id; do
+                branch=$(awk -v app="$app_id" '
+                  $0 == "[Flatpak Preinstall " app "]" {found=1; next}
+                  found && /^Branch=/ {print; valid=1; exit}
+                  found && /^\[/ {exit}
+                  END {if (!valid) print "MISSING"}
+                ' "$flatpaks_file")
+                if [ "$branch" = "MISSING" ]; then
+                  echo "✗ $app_id: missing Branch= key"
+                  exit 1
+                fi
+                info=$(flatpak remote-info --user flathub "${app_id}")
+                echo "${info}"
+                if grep -q "End-of-life" <<< "${info}"; then
+                  echo "✗ $app_id is end-of-life (renamed or unmaintained), update or remove it"
+                  exit 1
+                fi
+              done < <(sed -n 's/^\[Flatpak Preinstall \(.*\)\]$/\1/p' "$flatpaks_file")
+              echo "::endgroup::"
+            done
+
+      # The Brewfiles here only carry `flatpak "..."` entries (installed via
+      # ujust bbrew), so validate those IDs against Flathub too
+      - name: Validate Brewfile flatpak entries
+        shell: bash
+        run: |
+          set -euo pipefail
+          find files/usr/share/ublue-os/homebrew -iname '*.Brewfile' -print0 | \
+            while IFS= read -r -d '' brewfile; do
+              echo "::group:: ===$(basename "$brewfile")==="
+              while IFS= read -r app_id; do
+                info=$(flatpak remote-info --user flathub "${app_id}")
+                echo "${info}"
+                if grep -q "End-of-life" <<< "${info}"; then
+                  echo "✗ $app_id is end-of-life (renamed or unmaintained), update or remove it"
+                  exit 1
+                fi
+              done < <(sed -n 's/^flatpak "\(.*\)"$/\1/p' "$brewfile")
+              echo "::endgroup::"
+            done
