@@ -16,14 +16,6 @@ COPY /cosign.pub /cosign.pub
 # the F44 images, so this digest goes stale faster than the one in Containerfile.
 FROM quay.io/fedora-ostree-desktops/silverblue:rawhide@sha256:8ffc09536aa80f0abac8319b044ac1e2da22199c1276d759fdee092b13ca07c6 AS base
 
-# Sources that need a toolchain to build are compiled here, so nothing but
-# their output reaches the final image
-FROM base AS build-pre
-
-RUN --mount=type=cache,dst=/var/cache/libdnf5 \
-    --mount=type=bind,from=ctx,source=/,target=/ctx \
-    /ctx/build_files/build_pre.sh
-
 FROM base
 
 ARG IMAGE_NAME="${IMAGE_NAME:-bluespin-rawhide}"
@@ -31,7 +23,6 @@ ARG IMAGE_NAME="${IMAGE_NAME:-bluespin-rawhide}"
 RUN --mount=type=cache,dst=/var/cache/libdnf5 \
     --mount=type=cache,dst=/var/cache/rpm-ostree \
     --mount=type=bind,from=ctx,source=/,target=/ctx \
-    --mount=type=bind,from=build-pre,source=/out,target=/pre \
     /ctx/build_files/build_rawhide.sh
 
 RUN bootc container lint
