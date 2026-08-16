@@ -80,14 +80,39 @@ jobs:
         run: |
           set -euox pipefail
           DATE="$(date +%Y%m%d)"
-          for tag in rawhide "rawhide-${DATE}"; do
-            podman push --digestfile=/tmp/digestfile \
-              "${IMAGE_NAME}:latest" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
-          done
+
+          # Push once, then add the dated tag server-side. Pushing the same
+          # local image twice does not guarantee the same manifest digest --
+          # it demonstrably produced two -- which left one tag unsigned,
+          # since only the last digest was carried forward. Copying between
+          # registry refs reuses the manifest, so both tags share a digest
+          # and one signature covers both.
+          podman push --digestfile=/tmp/digestfile \
+            "${IMAGE_NAME}:latest" "${IMAGE_REGISTRY}/${IMAGE_NAME}:rawhide"
 
           digest=$(< /tmp/digestfile)
 
+          skopeo copy \
+            "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" \
+            "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:rawhide-${DATE}"
+
           echo "digest=${digest}" >> $GITHUB_OUTPUT
+
+      # Both tags must resolve to the digest we are about to sign
+      - name: Verify tags share the signed digest
+        env:
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          DATE="$(date +%Y%m%d)"
+          for tag in rawhide "rawhide-${DATE}"; do
+            got="$(skopeo inspect --no-tags --format '{{.Digest}}' \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}")"
+            [[ "${got}" == "${DIGEST}" ]] || {
+              echo "::error::${tag} is ${got}, expected ${DIGEST}"
+              exit 1
+            }
+          done
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
