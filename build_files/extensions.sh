@@ -39,6 +39,44 @@ install_vendored_extensions() {
     done
 }
 
+# Extensions the Bluefin base normally vendors for us. Only needed on a plain
+# Fedora base, where nothing supplies them -- the shipping variants take
+# Bluefin's copies instead (see the note in build.sh). Vendored from our forks
+# because upstream had not declared the current shell yet.
+install_bluefin_replacement_extensions() {
+    # caffeine and search-light ship the extension at a known directory; bazaar
+    # and gradia keep it in src/ with schemas and icons alongside
+    install -d "${EXT_DIR}/appindicatorsupport@rgcjonas.gmail.com"
+    cp -r /ctx/extensions/appindicator/{*.js,metadata.json,schemas,icons,interfaces-xml} \
+        "${EXT_DIR}/appindicatorsupport@rgcjonas.gmail.com/"
+
+    cp -r "/ctx/extensions/caffeine/caffeine@patapon.info" "${EXT_DIR}/"
+
+    install -d "${EXT_DIR}/search-light@icedman.github.com"
+    cp -r /ctx/extensions/search-light/{*.js,metadata.json,stylesheet.css,schemas} \
+        "${EXT_DIR}/search-light@icedman.github.com/"
+
+    install -d "${EXT_DIR}/bazaar-integration@kolunmi.github.io"
+    cp -r /ctx/extensions/bazaar-integration/src/. \
+        "${EXT_DIR}/bazaar-integration@kolunmi.github.io/"
+
+    install -d "${EXT_DIR}/gradia-integration@alexandervanhee.github.io"
+    cp -r /ctx/extensions/gradia-integration/src/. \
+        "${EXT_DIR}/gradia-integration@alexandervanhee.github.io/"
+    cp -r /ctx/extensions/gradia-integration/icons \
+        "${EXT_DIR}/gradia-integration@alexandervanhee.github.io/"
+    install -d "${EXT_DIR}/gradia-integration@alexandervanhee.github.io/schemas"
+    cp /ctx/extensions/gradia-integration/schemas/*.gschema.xml \
+        "${EXT_DIR}/gradia-integration@alexandervanhee.github.io/schemas/"
+
+    local ext
+    for ext in "appindicatorsupport@rgcjonas.gmail.com" "caffeine@patapon.info" \
+        "search-light@icedman.github.com" \
+        "gradia-integration@alexandervanhee.github.io"; do
+        glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
+    done
+}
+
 # Render the enabled-extensions override from the list passed as arguments.
 # The override sorts after the base's zz0 (which sets this key) and zz1
 # (per-extension settings), so it wins.
