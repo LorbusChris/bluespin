@@ -66,14 +66,21 @@ entry against Flathub on PRs, and fails on end-of-life or renamed apps.
 
 ## Building locally
 
-Requires `just` and rootful `podman`.
+Requires `just` and `podman`.
 
 ```bash
 just build bluespin            # or bluespin-dx / bluespin-surface
-just build-qcow2 localhost/bluespin   # disk image via bootc-image-builder
-just build-iso localhost/bluespin-dx  # per-variant Anaconda installer ISO
-just run-vm-qcow2 localhost/bluespin  # boot it in a web-based VM
+just rechunk bluespin          # optional: split into update-friendly layers
 ```
 
 CI builds all three variants daily and on every push to `main`
 (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
+
+## ISOs
+
+Live installer ISOs are built with
+[Titanoboa](https://github.com/ublue-os/titanoboa) directly from the
+published images — the same mechanism Bluefin and Bazzite use. Trigger the
+[`Build Bluespin ISOs`](.github/workflows/build-iso.yml) workflow from the
+Actions tab; it produces one ISO per variant (with checksums) as workflow
+artifacts.
