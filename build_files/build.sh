@@ -86,7 +86,7 @@ ADDITIONAL_FEDORA_PACKAGES=(
     gnome-shell-extension-workspace-indicator
 )
 
-dnf -y install --skip-unavailable \
+dnf -y install \
     "${ADDITIONAL_FEDORA_PACKAGES[@]}"
 
 dnf -y copr enable lorbus/network-displays

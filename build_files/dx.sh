@@ -121,7 +121,7 @@ BLUESPIN_DX_PACKAGES=(
     tio
 )
 
-dnf -y install --skip-unavailable "${BLUESPIN_DX_PACKAGES[@]}"
+dnf -y install "${BLUESPIN_DX_PACKAGES[@]}"
 
 dnf -y copr enable lorbus/calls
 dnf -y install calls
