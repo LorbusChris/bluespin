@@ -29,7 +29,10 @@ rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
 # falls through to insecureAcceptAnything for everything else, so bootc updates
 # from ghcr.io/lorbuschris would otherwise be pulled unverified. Extend that
 # policy rather than replace it.
-install -Dm0644 /ctx/cosign.pub /etc/pki/containers/lorbuschris.pub
+# The key lives in /usr/lib/pki/containers alongside the base's ublue-os keys:
+# vendor content belongs outside /etc, which bootc 3-way merges against local
+# edits.
+install -Dm0644 /ctx/cosign.pub /usr/lib/pki/containers/lorbuschris.pub
 install -d /etc/containers/registries.d
 tee /etc/containers/registries.d/lorbuschris.yaml << 'EOF'
 docker:
@@ -44,7 +47,7 @@ for policy in /etc/containers/policy.json /usr/etc/containers/policy.json; do
     policy_tmp="$(mktemp)"
     jq '.transports.docker["ghcr.io/lorbuschris"] = [{
             "type": "sigstoreSigned",
-            "keyPath": "/etc/pki/containers/lorbuschris.pub",
+            "keyPath": "/usr/lib/pki/containers/lorbuschris.pub",
             "signedIdentity": {"type": "matchRepository"}
         }]' "$policy" > "$policy_tmp"
     install -m0644 "$policy_tmp" "$policy"
