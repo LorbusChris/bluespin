@@ -35,8 +35,6 @@ dnf -y install --skip-unavailable \
     gnome-tweaks \
     firefox \
     mozilla-openh264 \
-    papers \
-    simple-scan \
     gnome-shell-extension-just-perfection \
     gnome-shell-extension-screen-autorotate
 
