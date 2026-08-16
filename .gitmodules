@@ -4,3 +4,7 @@
 [submodule "extensions/nekotorch"]
 	path = extensions/nekotorch
 	url = https://gitlab.com/lorbus42/NekoTorch.git
+[submodule "extensions/tilingshell"]
+	path = extensions/tilingshell
+	url = https://github.com/LorbusChris/tilingshell.git
+	branch = bluespin

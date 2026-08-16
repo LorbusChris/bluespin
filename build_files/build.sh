@@ -120,8 +120,7 @@ dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
 
 # GNOME Shell extensions vendored as submodules, the same way the Bluefin base
-# handles the extensions Fedora does not package. Both are plain JS, so the
-# only build step is compiling their settings schemas.
+# handles the extensions Fedora does not package.
 EXT_DIR=/usr/share/gnome-shell/extensions
 
 # Weather or Not: the extension lives in a subdirectory named after its UUID
@@ -134,7 +133,12 @@ cp -r /ctx/extensions/nekotorch/{extension.js,prefs.js,utils.js,logger.js,styles
 # udev rule granting the seat access to the torch LEDs
 install -Dm0644 /ctx/extensions/nekotorch/99-flash.rules /usr/lib/udev/rules.d/99-flash.rules
 
-for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com"; do
+# Tiling Shell is TypeScript; build_pre.sh compiles it in the build-pre stage
+# so the Node toolchain never touches this image, and the result is mounted here
+cp -r /pre/tilingshell@ferrarodomenico.com "${EXT_DIR}/"
+
+for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com" \
+    "tilingshell@ferrarodomenico.com"; do
     glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
     # Fail loudly if a vendored extension does not cover the shell we ship,
     # since a mismatch silently leaves it disabled at login
@@ -155,7 +159,8 @@ done
 # Dropped from Bluefin's defaults on purpose: blur-my-shell, dash-to-dock,
 # gsconnect and logomenu.
 # Installed but deliberately left off: nekotorch (only useful on hardware with
-# a torch LED), just-perfection, and the Fedora default (GNOME Classic) set.
+# a torch LED), tilingshell, just-perfection, and the Fedora default (GNOME
+# Classic) set.
 ENABLED_EXTENSIONS=(
     appindicatorsupport@rgcjonas.gmail.com
     bazaar-integration@kolunmi.github.io
