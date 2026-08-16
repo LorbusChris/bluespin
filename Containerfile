@@ -4,6 +4,7 @@ ARG IMAGE_NAME="${IMAGE_NAME:-bluespin}"
 FROM scratch AS ctx
 COPY /build_files /build_files
 COPY /files /files
+COPY /extensions /extensions
 COPY /cosign.pub /cosign.pub
 
 # Base Image
