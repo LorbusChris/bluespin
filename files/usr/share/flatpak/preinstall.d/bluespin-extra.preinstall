@@ -70,9 +70,6 @@ IsRuntime=false
 Branch=stable
 IsRuntime=false
 
-[Flatpak Preinstall com.transmissionbt.Transmission]
-Branch=stable
-IsRuntime=false
 
 [Flatpak Preinstall com.usebottles.bottles]
 Branch=stable
