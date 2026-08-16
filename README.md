@@ -1,15 +1,15 @@
 # bluespin
 
 Custom [bootc](https://bootc-dev.github.io/bootc/) images based on
-[Bluefin DX](https://projectbluefin.io/), built with the
+[Bluefin](https://projectbluefin.io/), built with the
 [Universal Blue](https://universal-blue.org/) tooling.
 
 ## Variants
 
 | Image | Purpose |
 | --- | --- |
-| `ghcr.io/lorbuschris/bluespin` | Base: Bluefin DX plus extra GNOME apps and shell extensions |
-| `ghcr.io/lorbuschris/bluespin-dx` | Adds development and packaging tools |
+| `ghcr.io/lorbuschris/bluespin` | Base: Bluefin plus extra GNOME apps and shell extensions |
+| `ghcr.io/lorbuschris/bluespin-dx` | Adds the developer layer ([dx.sh](build_files/dx.sh)) plus packaging tools |
 | `ghcr.io/lorbuschris/bluespin-surface` | Replaces the kernel with [linux-surface](https://github.com/linux-surface/linux-surface)'s `kernel-surface` + `iptsd` for Microsoft Surface devices |
 
 ## Switching to bluespin
@@ -100,6 +100,24 @@ and the Fedora default (GNOME Classic) set — all shipped, none enabled.
 GSettings overrides **replace** the key rather than merging, so that list
 restates Bluefin's defaults — new extensions Bluefin enables upstream will not
 appear here automatically.
+
+## The developer layer
+
+All variants build on `ghcr.io/ublue-os/bluefin`, not `bluefin-dx`, so the two
+non-dx images do not carry developer tooling — that alone is roughly half the
+uncompressed size. [dx.sh](build_files/dx.sh) re-creates Bluefin's dx layer for
+`bluespin-dx` only: virtualisation, incus/LXC, Cockpit, podman extras, tracing
+tools, ROCm and VS Code.
+
+**Docker is deliberately omitted** — no `docker-ce`, no `docker.socket`, and
+none of its docker-in-docker plumbing. Podman is in the base and
+`podman.socket` is enabled.
+
+Two units come with it, since neither exists on the non-dx base:
+`libvirt-workaround.service` relabels libvirt's `/var` directories at boot
+(a bootc image has no `/var`, so they come up without the SELinux contexts
+the RPM would have applied), and `bluespin-dx-groups.service` adds wheel
+members to `libvirt` and `incus-admin`.
 
 ## Building locally
 

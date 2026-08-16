@@ -29,7 +29,7 @@ set -xeuo pipefail
 # Bluefin's base normally supplies these; on plain Silverblue we ask for them
 # explicitly. Kept deliberately small -- this image exists to test GNOME, not
 # to reconstruct a distribution.
-dnf -y install --skip-unavailable \
+dnf -y install \
     just \
     jq \
     gnome-tweaks \
@@ -41,7 +41,7 @@ dnf -y install --skip-unavailable \
 # uupd (the update daemon Bluefin uses instead of rpm-ostreed-automatic) and
 # ujust both build for F45 in ublue's COPR even though their images do not.
 dnf -y copr enable ublue-os/packages
-dnf -y install --skip-unavailable uupd ublue-os-just
+dnf -y install uupd ublue-os-just
 dnf -y copr disable ublue-os/packages
 
 # Our own COPR extensions, same as the shipping variants

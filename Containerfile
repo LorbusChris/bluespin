@@ -8,7 +8,9 @@ COPY /extensions /extensions
 COPY /cosign.pub /cosign.pub
 
 # Base Image
-FROM ghcr.io/ublue-os/bluefin-dx:latest@sha256:ed3d1969bd627cd3c85e441e2d266fb4b926ef620a8fd50a4648d425866c0d80 AS base
+FROM ghcr.io/ublue-os/bluefin:latest@sha256:115fc6c4fdb481c1e432cfee7bce557b78dfa1b05b17e8df45674fc1142631cb AS base
+## bluefin, not bluefin-dx: the developer layer is re-created for the dx
+## variant only, in build_files/dx.sh, so the other two images do not carry it.
 ## Other possible base images include:
 # ghcr.io/ublue-os/bazzite:latest
 # quay.io/fedora/fedora-bootc:latest

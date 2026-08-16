@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+# Adds wheel members to the groups the dx tooling needs. Nothing else does
+# this, so without it libvirt and incus are installed but unusable until a
+# user edits their own group membership by hand.
+#
+# Adapted from Bluefin's bluefin-dx-groups, minus the docker group. Their
+# loop iterates $wheelarray unsubscripted, which expands to the first element
+# only; this one uses "${members[@]}" so every wheel member is covered.
+set -euo pipefail
+
+VERSION=1
+STATE=/etc/bluespin/dx-groups
+
+mkdir -p "$(dirname "${STATE}")"
+if [[ -f "${STATE}" && "$(cat "${STATE}")" == "${VERSION}" ]]; then
+    exit 0
+fi
+
+# On an image-based system the shipped groups live in /usr/lib/group; copy the
+# ones we need into /etc/group so usermod can act on them
+for group in incus-admin libvirt; do
+    if ! grep -q "^${group}:" /etc/group; then
+        grep "^${group}:" /usr/lib/group >> /etc/group || true
+    fi
+done
+
+mapfile -t members < <(getent group wheel | cut -d: -f4 | tr ',' '\n' | grep -v '^$' || true)
+for user in "${members[@]}"; do
+    usermod -aG incus-admin,libvirt "${user}"
+done
+
+echo "${VERSION}" > "${STATE}"
