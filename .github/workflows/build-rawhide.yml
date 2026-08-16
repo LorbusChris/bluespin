@@ -55,22 +55,16 @@ jobs:
           just rechunk ${IMAGE_NAME} latest
 
       # The reason this workflow exists: report what every extension declares
-      # against the shell the image actually shipped
+      # against the shell the image actually shipped. Informational, so a
+      # broken report must never block publishing a good image.
       - name: Report GNOME compatibility
         if: always()
+        continue-on-error: true
         run: |
-          set -euo pipefail
-          podman run --rm --entrypoint bash ${IMAGE_NAME}:latest -c '
-            echo "## GNOME $(rpm -q --qf "%{version}" gnome-shell) (Fedora $(rpm -E %fedora))"
-            echo
-            echo "| Extension | shell-version |"
-            echo "| --- | --- |"
-            for d in /usr/share/gnome-shell/extensions/*/; do
-              [ -f "$d/metadata.json" ] || continue
-              jq -r --arg u "$(basename "$d")" \
-                "\"| \($u) | \(.[\"shell-version\"] | join(\", \")) |\"" "$d/metadata.json"
-            done
-          ' >> "$GITHUB_STEP_SUMMARY"
+          podman run --rm \
+            -v "${PWD}/.github/scripts/report-extensions.sh:/tmp/report.sh:ro,Z" \
+            --entrypoint bash "${IMAGE_NAME}:latest" /tmp/report.sh \
+            >> "$GITHUB_STEP_SUMMARY"
 
       # Publishing only happens once the build and rechunk have succeeded.
       # Tags are rawhide-specific, so this can never overwrite a shipping tag.
