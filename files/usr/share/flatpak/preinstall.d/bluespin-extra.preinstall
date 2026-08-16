@@ -186,3 +186,7 @@ IsRuntime=false
 [Flatpak Preinstall com.valvesoftware.Steam]
 Branch=stable
 IsRuntime=false
+
+[Flatpak Preinstall org.blender.Blender]
+Branch=stable
+IsRuntime=false
