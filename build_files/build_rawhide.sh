@@ -51,6 +51,12 @@ dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
 
+# This image is published and signed like the shipping variants, so it needs
+# to verify its own updates too
+# shellcheck source=build_files/signing.sh
+source /ctx/build_files/signing.sh
+install_signing_policy
+
 # Flatpaks. Bluefin gets these via common's flatpak-preinstall.service; on a
 # plain base neither the remote nor the unit exists, so supply both. Bazaar and
 # Gradia come from here -- without them the bazaar/gradia integration
