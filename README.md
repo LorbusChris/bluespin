@@ -56,8 +56,9 @@ automatically — diff against
 `projectbluefin/common:system_files/bluefin/usr/share/ublue-os/homebrew/`
 occasionally. The base's `brew-preinstall` mechanism (network-installing CLI
 tools at first login) is removed in the build; its `system-cli` tools are
-baked as RPMs instead, while `bluefinctl` and the `chairlift` cask are
-dropped.
+already present in the image as RPMs (or, for starship, a binary Bluefin
+bakes from upstream), so brew was only shadowing them in `PATH`, while
+`bluefinctl` and the `chairlift` cask are dropped.
 
 Note that removing a preinstall entry uninstalls the app from users'
 systems; apps installed before the preinstall migration (or by the user) are
