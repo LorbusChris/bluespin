@@ -48,7 +48,6 @@ keeps `full-desktop.Brewfile` as the single opt-in catalog. Deliberately
 excluded from Bluefin's current sets:
 
 - `org.mozilla.firefox` — Firefox is installed as an RPM instead
-- `org.gnome.Papers`, `org.gnome.SimpleScan` — installed as RPMs instead
 - `io.missioncenter.MissionCenter`
 
 Because of the overwrite, new Bluefin Brewfile additions do not appear here

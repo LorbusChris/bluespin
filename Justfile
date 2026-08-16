@@ -109,6 +109,19 @@ build $target_image=image_name $tag=default_tag:
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 
+# Build the experimental rawhide/GNOME 51 test image
+build-rawhide $target_image="bluespin-rawhide" $tag=default_tag:
+    #!/usr/bin/env bash
+    set -euox pipefail
+
+    podman build \
+      --build-arg "IMAGE_NAME=${target_image}" \
+      --label "org.opencontainers.image.title=${target_image}" \
+      --label "org.opencontainers.image.description=Experimental bluespin on Fedora rawhide" \
+      --pull=newer \
+      --tag "${target_image}:${tag}" \
+      --file Containerfile.rawhide .
+
 # Split the image for smaller updates (New)!
 rechunk $target_image=image_name $tag=default_tag:
     #!/usr/bin/env bash

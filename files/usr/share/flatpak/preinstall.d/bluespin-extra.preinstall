@@ -70,9 +70,6 @@ IsRuntime=false
 Branch=stable
 IsRuntime=false
 
-[Flatpak Preinstall com.transmissionbt.Transmission]
-Branch=stable
-IsRuntime=false
 
 [Flatpak Preinstall com.usebottles.bottles]
 Branch=stable
@@ -183,5 +180,13 @@ Branch=stable
 IsRuntime=false
 
 [Flatpak Preinstall re.sonny.Eloquent]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall com.valvesoftware.Steam]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.blender.Blender]
 Branch=stable
 IsRuntime=false

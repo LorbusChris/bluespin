@@ -4,6 +4,12 @@
     'config:best-practices',
   ],
   rebaseWhen: 'never',
+  // Vendored GNOME Shell extensions in extensions/. Renovate's submodule
+  // manager is off by default; it follows each submodule's tracked branch
+  // (see .gitmodules), so our forks get bumped as we push to them.
+  'git-submodules': {
+    enabled: true,
+  },
   customManagers: [
     {
       customType: 'regex',
@@ -17,6 +23,16 @@
     },
   ],
   packageRules: [
+    {
+      // A vendored extension is only safe to bump if it still declares the
+      // shell we ship -- the build asserts exactly that, so let CI be the
+      // gate rather than merging these unreviewed.
+      description: 'Never automerge vendored extension bumps',
+      matchManagers: [
+        'git-submodules',
+      ],
+      automerge: false,
+    },
     {
       automerge: true,
       matchUpdateTypes: [

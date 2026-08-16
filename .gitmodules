@@ -8,3 +8,18 @@
 	path = extensions/tilingshell
 	url = https://github.com/LorbusChris/tilingshell.git
 	branch = bluespin
+[submodule "extensions/caffeine"]
+	path = extensions/caffeine
+	url = https://github.com/LorbusChris/gnome-shell-extension-caffeine.git
+[submodule "extensions/search-light"]
+	path = extensions/search-light
+	url = https://github.com/LorbusChris/search-light.git
+[submodule "extensions/bazaar-integration"]
+	path = extensions/bazaar-integration
+	url = https://github.com/LorbusChris/bazaar-companion.git
+[submodule "extensions/gradia-integration"]
+	path = extensions/gradia-integration
+	url = https://github.com/LorbusChris/gradia-capture.git
+[submodule "extensions/appindicator"]
+	path = extensions/appindicator
+	url = https://github.com/ubuntu/gnome-shell-extension-appindicator.git
