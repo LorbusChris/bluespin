@@ -117,7 +117,7 @@ ENABLED_EXTENSIONS=(
     appindicatorsupport@rgcjonas.gmail.com
     bazaar-integration@kolunmi.github.io
     caffeine@patapon.info
-    gnome-network-displays@gnome.org
+    network-displays@gnome.org
     gradia-integration@alexandervanhee.github.io
     search-light@icedman.github.com
     weatherornot@somepaulo.github.io
