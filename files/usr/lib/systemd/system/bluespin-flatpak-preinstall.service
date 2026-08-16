@@ -1,0 +1,19 @@
+[Unit]
+# Bluefin ships flatpak-preinstall.service via its `common` artifact; a plain
+# Fedora base has no equivalent, so the .preinstall files we install would
+# never be acted on. This is the minimal stand-in for the rawhide image.
+Description=Preinstall flatpaks listed in /usr/share/flatpak/preinstall.d
+Documentation=https://docs.flatpak.org/en/latest/flatpak-command-reference.html#flatpak-preinstall
+After=network-online.target
+Wants=network-online.target
+ConditionPathExistsGlob=/usr/share/flatpak/preinstall.d/*.preinstall
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Not fatal: a flatpak that fails to resolve should not put the unit in a
+# failed state on every boot
+ExecStart=-/usr/bin/flatpak preinstall -y --noninteractive
+
+[Install]
+WantedBy=multi-user.target

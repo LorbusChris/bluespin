@@ -51,6 +51,22 @@ dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
 
+# Flatpaks. Bluefin gets these via common's flatpak-preinstall.service; on a
+# plain base neither the remote nor the unit exists, so supply both. Bazaar and
+# Gradia come from here -- without them the bazaar/gradia integration
+# extensions are enabled but have nothing to integrate with.
+# Declared in /etc rather than `flatpak remote-add`, whose state lands in
+# /var/lib/flatpak and is wiped by the cleanup at the end of this script
+install -d /etc/flatpak/remotes.d
+curl -fsSL -o /etc/flatpak/remotes.d/flathub.flatpakrepo \
+    https://flathub.org/repo/flathub.flatpakrepo
+install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
+    /ctx/files/usr/share/flatpak/preinstall.d/bluespin.preinstall \
+    /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
+install -Dm0644 /ctx/files/usr/lib/systemd/system/bluespin-flatpak-preinstall.service \
+    /usr/lib/systemd/system/bluespin-flatpak-preinstall.service
+systemctl enable bluespin-flatpak-preinstall.service
+
 # shellcheck source=build_files/extensions.sh
 source /ctx/build_files/extensions.sh
 install_vendored_extensions
