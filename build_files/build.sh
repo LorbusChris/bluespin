@@ -138,24 +138,6 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
 
     # The base is bluefin, not bluefin-dx, so the developer layer is ours
     /ctx/build_files/dx.sh
-
-    dnf -y install --skip-unavailable \
-        fedora-packager \
-        fedora-packager-kerberos \
-        gdb \
-        git-credential-libsecret \
-        git-evtag \
-        pmbootstrap \
-        wireshark \
-        dvb-tools \
-        v4l-utils \
-        feedbackd \
-        nextcloud-client-nautilus \
-        tio
-
-    dnf -y copr enable lorbus/calls
-    dnf -y install calls
-    dnf -y copr disable lorbus/calls
 fi
 
 # Surface Variant

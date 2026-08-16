@@ -104,6 +104,29 @@ if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
     dnf -y install rocm-hip rocm-opencl rocm-smi rocminfo
 fi
 
+# bluespin's own additions, as opposed to everything above, which mirrors
+# Bluefin's dx layer: packaging and kernel work, phone and capture hardware.
+BLUESPIN_DX_PACKAGES=(
+    fedora-packager
+    fedora-packager-kerberos
+    gdb
+    git-credential-libsecret
+    git-evtag
+    pmbootstrap
+    wireshark
+    dvb-tools
+    v4l-utils
+    feedbackd
+    nextcloud-client-nautilus
+    tio
+)
+
+dnf -y install --skip-unavailable "${BLUESPIN_DX_PACKAGES[@]}"
+
+dnf -y copr enable lorbus/calls
+dnf -y install calls
+dnf -y copr disable lorbus/calls
+
 # VS Code from Microsoft's repo, enabled only for this transaction so the repo
 # is never left active in the image
 tee /etc/yum.repos.d/vscode.repo << 'EOF'
