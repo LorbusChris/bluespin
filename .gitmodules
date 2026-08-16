@@ -4,10 +4,6 @@
 [submodule "extensions/nekotorch"]
 	path = extensions/nekotorch
 	url = https://gitlab.com/lorbus42/NekoTorch.git
-[submodule "extensions/tilingshell"]
-	path = extensions/tilingshell
-	url = https://github.com/LorbusChris/tilingshell.git
-	branch = bluespin
 [submodule "extensions/caffeine"]
 	path = extensions/caffeine
 	url = https://github.com/LorbusChris/gnome-shell-extension-caffeine.git
@@ -23,3 +19,6 @@
 [submodule "extensions/appindicator"]
 	path = extensions/appindicator
 	url = https://github.com/ubuntu/gnome-shell-extension-appindicator.git
+[submodule "extensions/mosaicwm"]
+	path = extensions/mosaicwm
+	url = https://github.com/CleoMenezesJr/MosaicWM.git

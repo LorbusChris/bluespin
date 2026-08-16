@@ -78,12 +78,13 @@ Two extensions Fedora does not package are vendored here the same way, under
 | --- | --- | --- |
 | Weather or Not | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not) | dropped from Fedora after F43 |
 | NekoTorch | [gitlab.com/lorbus42](https://gitlab.com/lorbus42/NekoTorch) | only packaged in a COPR targeting shell 48 |
-| Tiling Shell | [domferr/tilingshell](https://github.com/domferr/tilingshell) (upstream, tag `18.0-candidate`) | not in Fedora; only third-party COPRs |
+| Mosaic WM | [CleoMenezesJr/MosaicWM](https://github.com/CleoMenezesJr/MosaicWM) | not packaged anywhere |
 
-Tiling Shell ships TypeScript, so it is compiled by
-[build_pre.sh](build_files/build_pre.sh) in a separate `build-pre` container
-stage; only its output is copied into the image, keeping the Node toolchain
-out entirely.
+Mosaic WM is the tiling extension, replacing Tiling Shell. It is plain
+JavaScript, so it needs no build step. Upstream declares `shell-version`
+`["50"]`, so it is installed only where that matches — it patches window
+management internals via `InjectionManager`, which is not something to declare
+compatible with a newer shell without running it.
 
 Clone with `--recurse-submodules`. Bump them with
 `git submodule update --remote`; every enabled extension must declare support
@@ -94,7 +95,7 @@ Which extensions are on by default is the `ENABLED_EXTENSIONS` list in
 `zz2-bluespin-extensions.gschema.override` at build time. `screen-rotate` is
 added on `bluespin-surface` only; everything else is the same across variants.
 Bluefin's `blur-my-shell`, `dash-to-dock`, `gsconnect` and `logomenu` are
-deliberately left off, as are `nekotorch`, `tilingshell`, `just-perfection`
+deliberately left off, as are `nekotorch`, `mosaicwm`, `just-perfection`
 and the Fedora default (GNOME Classic) set — all shipped, none enabled.
 
 GSettings overrides **replace** the key rather than merging, so that list

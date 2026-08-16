@@ -98,6 +98,7 @@ dnf -y copr disable lorbus/network-displays
 # shellcheck source=build_files/extensions.sh
 source /ctx/build_files/extensions.sh
 install_vendored_extensions
+install_mosaicwm
 
 # Extensions enabled by default. The override sorts after the base's zz0
 # (which sets this key) and zz1 (per-extension settings), so it wins.
@@ -111,7 +112,7 @@ install_vendored_extensions
 # Dropped from Bluefin's defaults on purpose: blur-my-shell, dash-to-dock,
 # gsconnect and logomenu.
 # Installed but deliberately left off: nekotorch (only useful on hardware with
-# a torch LED), tilingshell, just-perfection, and the Fedora default (GNOME
+# a torch LED), mosaicwm, just-perfection, and the Fedora default (GNOME
 # Classic) set.
 ENABLED_EXTENSIONS=(
     appindicatorsupport@rgcjonas.gmail.com

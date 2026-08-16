@@ -18,17 +18,11 @@ install_vendored_extensions() {
     # udev rule granting the seat access to the torch LEDs
     install -Dm0644 /ctx/extensions/nekotorch/99-flash.rules /usr/lib/udev/rules.d/99-flash.rules
 
-    # Tiling Shell is TypeScript; build_pre.sh compiles it in the build-pre
-    # stage so the Node toolchain never touches this image, and the result is
-    # mounted here
-    cp -r /pre/tilingshell@ferrarodomenico.com "${EXT_DIR}/"
-
     local ext shell_major
     # Leading digits only: released versions look like 50.3, but a pre-release
     # is packaged as 51~beta, and extensions declare plain "51"
     shell_major="$(rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+')"
-    for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com" \
-        "tilingshell@ferrarodomenico.com"; do
+    for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com"; do
         glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
         # Fail loudly if a vendored extension does not cover the shell we ship,
         # since a mismatch silently leaves it disabled at login. On a
@@ -75,6 +69,27 @@ install_bluefin_replacement_extensions() {
         "gradia-integration@alexandervanhee.github.io"; do
         glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
     done
+}
+
+# Mosaic WM, our tiling extension. Plain JavaScript, so the only build step is
+# compiling its schemas.
+#
+# Kept out of install_vendored_extensions on purpose: upstream declares
+# shell-version ["50"] only, and unlike the small extensions we bumped to 51
+# ourselves, this one patches window-management internals across two dozen
+# files via InjectionManager -- not something to declare compatible without
+# running it. Move it into the shared installer once upstream covers the newer
+# shell.
+install_mosaicwm() {
+    local uuid="mosaicwm@cleomenezesjr.github.io"
+    install -d "${EXT_DIR}/${uuid}"
+    cp -r /ctx/extensions/mosaicwm/extension/. "${EXT_DIR}/${uuid}/"
+    glib-compile-schemas --strict "${EXT_DIR}/${uuid}/schemas"
+
+    local shell_major
+    shell_major="$(rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+')"
+    jq -e --arg v "${shell_major}" '.["shell-version"] | index($v)' \
+        "${EXT_DIR}/${uuid}/metadata.json" > /dev/null
 }
 
 # Render the enabled-extensions override from the list passed as arguments.
