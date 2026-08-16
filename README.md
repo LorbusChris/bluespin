@@ -65,6 +65,30 @@ systems; apps installed before the preinstall migration (or by the user) are
 never removed automatically. The `Validate Flatpaks` workflow checks every
 entry against Flathub on PRs, and fails on end-of-life or renamed apps.
 
+## GNOME Shell extensions
+
+Most extensions come from Fedora RPMs, or from the Bluefin base, which vendors
+several as git submodules pinned to branches matching the shell it ships — the
+build deliberately does not install Fedora's RPMs for those, so the base's
+copies survive (see the note in [build.sh](build_files/build.sh)).
+
+Two extensions Fedora does not package are vendored here the same way, under
+[extensions/](extensions/):
+
+| Extension | Upstream fork | Why vendored |
+| --- | --- | --- |
+| Weather or Not | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not) | dropped from Fedora after F43 |
+| NekoTorch | [gitlab.com/lorbus42](https://gitlab.com/lorbus42/NekoTorch) | only packaged in a COPR targeting shell 48 |
+
+Clone with `--recurse-submodules`. Bump them with
+`git submodule update --remote`; every enabled extension must declare support
+for the shell version the image ships, which the build enforces.
+
+`zz2-bluespin-extensions.gschema.override` sets which extensions are on by
+default. GSettings overrides **replace** the key rather than merging, so it
+restates Bluefin's defaults — new extensions Bluefin enables upstream will not
+appear here automatically.
+
 ## Building locally
 
 Requires `just` and `podman`.

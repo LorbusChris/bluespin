@@ -1,0 +1,6 @@
+[submodule "extensions/weather-or-not"]
+	path = extensions/weather-or-not
+	url = https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not.git
+[submodule "extensions/nekotorch"]
+	path = extensions/nekotorch
+	url = https://gitlab.com/lorbus42/NekoTorch.git

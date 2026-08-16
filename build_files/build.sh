@@ -85,7 +85,9 @@ ADDITIONAL_FEDORA_PACKAGES=(
     #gnome-shell-extension-nekotorch
     #gnome-shell-extension-network-displays
     gnome-shell-extension-screen-autorotate
-    gnome-shell-extension-weather-or-not
+    # weather-or-not and nekotorch are vendored as submodules below: Fedora
+    # dropped the weather-or-not package after F43, and nekotorch is only
+    # packaged in a COPR that still targets shell 48
 
     # Default GNOME Shell Extensions
     # https://src.fedoraproject.org/rpms/gnome-shell-extensions
@@ -111,6 +113,35 @@ dnf -y install --skip-unavailable \
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
+
+# GNOME Shell extensions vendored as submodules, the same way the Bluefin base
+# handles the extensions Fedora does not package. Both are plain JS, so the
+# only build step is compiling their settings schemas.
+EXT_DIR=/usr/share/gnome-shell/extensions
+
+# Weather or Not: the extension lives in a subdirectory named after its UUID
+cp -r "/ctx/extensions/weather-or-not/weatherornot@somepaulo.github.io" "${EXT_DIR}/"
+
+# NekoTorch: extension sources sit at the repository root
+install -d "${EXT_DIR}/nekotorch@nekocwd.gitlab.com"
+cp -r /ctx/extensions/nekotorch/{extension.js,prefs.js,utils.js,logger.js,stylesheet.css,metadata.json,icons,schemas} \
+    "${EXT_DIR}/nekotorch@nekocwd.gitlab.com/"
+# udev rule granting the seat access to the torch LEDs
+install -Dm0644 /ctx/extensions/nekotorch/99-flash.rules /usr/lib/udev/rules.d/99-flash.rules
+
+for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com"; do
+    glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
+    # Fail loudly if a vendored extension does not cover the shell we ship,
+    # since a mismatch silently leaves it disabled at login
+    shell_major="$(rpm -q --qf '%{version}' gnome-shell | cut -d. -f1)"
+    jq -e --arg v "${shell_major}" '.["shell-version"] | index($v)' \
+        "${EXT_DIR}/${ext}/metadata.json" > /dev/null
+done
+
+# Enable our extension set on top of Bluefin's (see the override for caveats)
+install -Dm0644 /ctx/files/usr/share/glib-2.0/schemas/zz2-bluespin-extensions.gschema.override \
+    /usr/share/glib-2.0/schemas/
+glib-compile-schemas /usr/share/glib-2.0/schemas
 
 # DX Variant
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then

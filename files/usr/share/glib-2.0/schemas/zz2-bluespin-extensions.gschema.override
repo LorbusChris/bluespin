@@ -1,0 +1,10 @@
+# Sorts after the base's zz0-bluefin-modifications (which sets this key) and
+# zz1-bluefin-extensions (per-extension settings), so this wins.
+#
+# NOTE: enabled-extensions is replaced wholesale, not merged, so Bluefin's own
+# defaults have to be restated here. That means new extensions Bluefin enables
+# upstream will NOT reach this image until they are added below -- diff against
+# projectbluefin/common:system_files/bluefin/usr/share/glib-2.0/schemas/
+# zz0-bluefin-modifications.gschema.override when rebasing onto a new Bluefin.
+[org.gnome.shell]
+enabled-extensions = ['appindicatorsupport@rgcjonas.gmail.com', 'bazaar-integration@kolunmi.github.io', 'blur-my-shell@aunetx', 'dash-to-dock@micxgx.gmail.com', 'gradia-integration@alexandervanhee.github.io', 'gsconnect@andyholmes.github.io', 'logomenu@aryan_k', 'search-light@icedman.github.com', 'weatherornot@somepaulo.github.io', 'nekotorch@nekocwd.gitlab.com']
