@@ -46,10 +46,21 @@ install_vendored_extensions() {
 # NOTE: enabled-extensions is replaced wholesale, not merged, so any defaults
 # from the base have to be restated by the caller.
 write_enabled_extensions_override() {
-    local ext
+    local ext shell_major
+    shell_major="$(rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+')"
+
     # Every enabled extension must exist, or it is silently ignored at login
     for ext in "$@"; do
         [[ -d "${EXT_DIR}/${ext}" ]]
+
+        # Warn rather than fail: for extensions we do not vendor, not declaring
+        # the running shell means upstream has not caught up yet, which is
+        # information rather than a defect in this repo. Enabling one anyway is
+        # harmless -- GNOME just ignores it -- but it is worth seeing.
+        if ! jq -e --arg v "${shell_major}" '.["shell-version"] | index($v)' \
+            "${EXT_DIR}/${ext}/metadata.json" > /dev/null; then
+            echo "::warning::${ext} does not declare GNOME ${shell_major}; it will not load"
+        fi
     done
 
     {

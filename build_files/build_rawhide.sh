@@ -38,7 +38,9 @@ dnf -y install --skip-unavailable \
     papers \
     simple-scan \
     gnome-shell-extension-just-perfection \
-    gnome-shell-extension-screen-autorotate
+    gnome-shell-extension-screen-autorotate \
+    gnome-shell-extension-appindicator \
+    gnome-shell-extension-caffeine
 
 # uupd (the update daemon Bluefin uses instead of rpm-ostreed-automatic) and
 # ujust both build for F45 in ublue's COPR even though their images do not.
@@ -55,9 +57,14 @@ dnf -y copr disable lorbus/network-displays
 source /ctx/build_files/extensions.sh
 install_vendored_extensions
 
-# Only our own extensions are enabled here. Bluefin's defaults are absent from
-# this base, so unlike build.sh there is nothing of theirs to restate.
+# Keep the shipping variants' enabled set as far as this base allows. Fedora
+# packages appindicator and caffeine, so those come back as RPMs. Three of
+# Bluefin's remain out of reach: search-light is not packaged anywhere, and
+# bazaar-integration and gradia-integration are Bluefin submodules that
+# integrate with apps this base does not ship anyway.
 ENABLED_EXTENSIONS=(
+    appindicatorsupport@rgcjonas.gmail.com
+    caffeine@patapon.info
     gnome-network-displays@gnome.org
     weatherornot@somepaulo.github.io
 )
