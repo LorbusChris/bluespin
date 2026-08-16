@@ -41,3 +41,7 @@ IsRuntime=false
 [Flatpak Preinstall org.pipewire.Helvum]
 Branch=stable
 IsRuntime=false
+
+[Flatpak Preinstall org.ghidra_sre.Ghidra]
+Branch=stable
+IsRuntime=false
