@@ -107,6 +107,7 @@ fi
 # bluespin's own additions, as opposed to everything above, which mirrors
 # Bluefin's dx layer: packaging and kernel work, phone and capture hardware.
 BLUESPIN_DX_PACKAGES=(
+    copr-cli
     fedora-packager
     fedora-packager-kerberos
     gdb
