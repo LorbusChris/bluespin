@@ -10,9 +10,11 @@ install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
 install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
 
 # Remove the base's brew-preinstall mechanism (a user service that installs
-# Homebrew packages from the network at first login). Its CLI tools are baked
-# as RPMs below instead; bluefinctl (manages bluefin channels/rebases that
-# don't apply to this image) and the chairlift cask are dropped entirely.
+# Homebrew packages from the network at first login). Its system-cli tools
+# (fzf, htop, rclone, tmux, starship, ...) are already in the image as RPMs or
+# binaries shipped by the base, so brew was only shadowing them in PATH;
+# bluefinctl (manages bluefin channels/rebases that don't apply to this image)
+# and the chairlift cask are dropped entirely.
 rm -f /usr/share/ublue-os/homebrew/preinstall.d/*.Brewfile \
     /usr/lib/systemd/user/brew-preinstall.service \
     /usr/lib/systemd/user-preset/01-brew-preinstall.preset
@@ -70,18 +72,6 @@ ADDITIONAL_FEDORA_PACKAGES=(
     firefox # for GSConnect and mDNS printer discovery
     mozilla-openh264
 
-    # RPM equivalents of the removed brew-preinstall system-cli set
-    fzf
-    glow
-    htop
-    rclone
-    restic
-    smartmontools
-    squashfs-tools
-    tcpdump
-    tmux
-    yubikey-manager
-
     # Custom GNOME Shell Extensions
     gnome-shell-extension-appindicator
     gnome-shell-extension-blur-my-shell
@@ -118,12 +108,6 @@ dnf -y install --skip-unavailable \
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
-
-# starship (bluefin's default shell prompt, previously brew-preinstalled) has
-# no Fedora package; bake it from the atim/starship COPR
-dnf -y copr enable atim/starship
-dnf -y install starship
-dnf -y copr disable atim/starship
 
 # DX Variant
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
