@@ -41,8 +41,6 @@ dnf -y remove \
 
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
-    papers # for mDNS printer discovery
-    simple-scan # for mDNS printer discovery
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
     mozilla-openh264
