@@ -1,0 +1,18 @@
+[Unit]
+# /var is not part of a bootc image -- it is materialised at deployment -- so
+# libvirt's runtime directories come up with the parent's default SELinux
+# labels rather than virt_var_lib_t/virt_log_t, and libvirtd hits denials.
+# Relabel them once at boot. Bluefin ships the same unit in its dx overlay,
+# which we no longer inherit from the non-dx base.
+Description=Workaround to relabel libvirt files and directories
+ConditionPathIsDirectory=/var/lib/libvirt/
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/sbin/restorecon -R /var/log/libvirt/
+ExecStart=-/usr/sbin/restorecon -R /var/lib/libvirt/
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

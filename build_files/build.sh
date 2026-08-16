@@ -136,6 +136,9 @@ if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
     install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
         /ctx/files/usr/share/flatpak/preinstall.d/bluespin-dx.preinstall
 
+    # The base is bluefin, not bluefin-dx, so the developer layer is ours
+    /ctx/build_files/dx.sh
+
     dnf -y install --skip-unavailable \
         fedora-packager \
         fedora-packager-kerberos \

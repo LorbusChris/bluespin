@@ -1,0 +1,119 @@
+#!/bin/bash
+# The developer layer for bluespin-dx.
+#
+# All variants build on ghcr.io/ublue-os/bluefin rather than bluefin-dx, so
+# the base carries no developer tooling and the two non-dx images are ~2 GB
+# smaller. This re-creates Bluefin's dx layer for the one variant that wants
+# it, adapted from their build_files/dx/00-dx.sh.
+#
+# The one deliberate omission is Docker: no docker-ce, docker-ce-cli,
+# containerd.io, buildx/compose/model plugins, no docker.socket, no
+# iptable_nat module-load or IP-forwarding sysctl for docker-in-docker.
+# Podman is already in the base and podman.socket is enabled below.
+set -xeuo pipefail
+
+DX_PACKAGES=(
+    # Virtualisation
+    edk2-ovmf
+    libvirt
+    libvirt-nss
+    qemu
+    qemu-char-spice
+    qemu-device-display-virtio-gpu
+    qemu-device-display-virtio-vga
+    qemu-device-usb-redirect
+    qemu-img
+    qemu-system-x86-core
+    qemu-user-binfmt
+    qemu-user-static
+    virt-manager
+    virt-v2v
+    virt-viewer
+
+    # System containers
+    incus
+    incus-agent
+    lxc
+
+    # Cockpit
+    cockpit-bridge
+    cockpit-machines
+    cockpit-networkmanager
+    cockpit-ostree
+    cockpit-podman
+    cockpit-selinux
+    cockpit-storaged
+    cockpit-system
+
+    # Podman extras
+    podman-compose
+    podman-machine
+    podman-tui
+
+    # Tracing and performance
+    bcc
+    bpftop
+    bpftrace
+    iotop
+    nicstat
+    numactl
+    sysprof
+    tiptop
+    trace-cmd
+
+    # Development odds and ends
+    android-tools
+    dbus-x11
+    flatpak-builder
+    genisoimage
+    git-subtree
+    git-svn
+    osbuild-selinux
+    p7zip
+    p7zip-plugins
+    udica
+    util-linux-script
+    wtype
+    ydotool
+    cascadia-code-fonts
+)
+
+dnf -y install "${DX_PACKAGES[@]}"
+
+# ROCm does not play well with the nvidia driver; this image has no nvidia
+# variant today, but keep the guard so adding one does not break it
+if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
+    dnf -y install rocm-hip rocm-opencl rocm-smi rocminfo
+fi
+
+# VS Code from Microsoft's repo, enabled only for this transaction so the repo
+# is never left active in the image
+tee /etc/yum.repos.d/vscode.repo << 'EOF'
+[code]
+name=Visual Studio Code
+baseurl=https://packages.microsoft.com/yumrepos/vscode
+enabled=0
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+EOF
+dnf -y install --enablerepo=code code
+
+# VFIO in the initramfs, for GPU passthrough to guests
+install -Dm0644 /ctx/files/usr/lib/dracut/dracut.conf.d/80-vfio.conf \
+    /usr/lib/dracut/dracut.conf.d/80-vfio.conf
+
+# Relabel libvirt's /var directories at boot, and make sure the log directory
+# exists to be relabelled
+install -Dm0644 /ctx/files/usr/lib/systemd/system/libvirt-workaround.service \
+    /usr/lib/systemd/system/libvirt-workaround.service
+install -Dm0644 /ctx/files/usr/lib/tmpfiles.d/libvirt-workaround.conf \
+    /usr/lib/tmpfiles.d/libvirt-workaround.conf
+
+# Put wheel members in the groups the tooling needs
+install -Dm0755 /ctx/files/usr/bin/bluespin-dx-groups /usr/bin/bluespin-dx-groups
+install -Dm0644 /ctx/files/usr/lib/systemd/system/bluespin-dx-groups.service \
+    /usr/lib/systemd/system/bluespin-dx-groups.service
+
+systemctl enable podman.socket
+systemctl enable libvirt-workaround.service
+systemctl enable bluespin-dx-groups.service
