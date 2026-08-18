@@ -14,7 +14,11 @@ partition_table:
         fstab_options: "umask=0077,shortname=winnt"
         fstab_freq: 0
         fstab_passno: 2
-    - size: "6 GiB"
+    # 10 GiB rather than pocketblue's 6: this image carries a full desktop and
+    # does not fit in 6. grow-rootfs expands the filesystem to the whole
+    # userdata partition on first boot, so this is only the SHIPPING size --
+    # raising it costs fastboot transfer time, not space on the device.
+    - size: "10 GiB"
       type: "0FC63DAF-8483-4772-8E79-3D69D8477DE4" # Linux Filesystem
       payload_type: "btrfs"
       payload:
