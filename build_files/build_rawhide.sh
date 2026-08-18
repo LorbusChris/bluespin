@@ -55,10 +55,6 @@ dnf -y copr disable lorbus/network-displays
 source /ctx/build_files/signing.sh
 install_signing_policy
 
-# Nothing in stock GNOME registers a handler for trash:/// -- see the file for
-# why, and why it sits in gnome-mimeapps.list rather than mimeapps.list
-install -Dm0644 /ctx/files/etc/xdg/gnome-mimeapps.list /etc/xdg/gnome-mimeapps.list
-
 # Flatpaks. Bluefin gets these via common's flatpak-preinstall.service; on a
 # plain base neither the remote nor the unit exists, so supply both. Bazaar and
 # Gradia come from here -- without them the bazaar/gradia integration

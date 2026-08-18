@@ -28,10 +28,6 @@ rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
 source /ctx/build_files/signing.sh
 install_signing_policy
 
-# Nothing in stock GNOME registers a handler for trash:/// -- see the file for
-# why, and why it sits in gnome-mimeapps.list rather than mimeapps.list
-install -Dm0644 /ctx/files/etc/xdg/gnome-mimeapps.list /etc/xdg/gnome-mimeapps.list
-
 # Bluefin fixups
 if [[ -f /usr/share/applications/gnome-system-monitor.desktop ]]; then
     sed -i '/^Hidden=true/d' /usr/share/applications/gnome-system-monitor.desktop

@@ -124,15 +124,6 @@ BLUESPIN_DX_PACKAGES=(
 
 dnf -y install "${BLUESPIN_DX_PACKAGES[@]}"
 
-# Nautilus from our own COPR build (same 50.2.2, release -100). Scoped
-# deliberately: lorbus/misc also carries a PipeWire set this image does not
-# want, so the repo is enabled for these two packages only rather than being
-# left visible to a general upgrade.
-dnf -y copr enable lorbus/misc
-dnf -y copr disable lorbus/misc
-dnf -y --enablerepo="copr:copr.fedorainfracloud.org:lorbus:misc" \
-    upgrade nautilus nautilus-extensions
-
 dnf -y copr enable lorbus/calls
 dnf -y install calls
 dnf -y copr disable lorbus/calls
