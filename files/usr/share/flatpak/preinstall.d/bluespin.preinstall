@@ -1,6 +1,8 @@
 # Generated from the former system-flatpaks.list.
 # NOTE: flatpak-preinstall tracks these entries; removing an entry later
 # uninstalls that app from users' systems. Remove deliberately.
+#
+# bluespin-arches: x86_64
 
 [Flatpak Preinstall com.github.PintaProject.Pinta]
 Branch=stable

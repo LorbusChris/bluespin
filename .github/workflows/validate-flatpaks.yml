@@ -29,6 +29,19 @@ jobs:
           find files/usr/share/flatpak/preinstall.d -iname '*.preinstall' -print0 | \
             while IFS= read -r -d '' flatpaks_file; do
               echo "::group:: ===$(basename "$flatpaks_file")==="
+              # Availability is per-architecture, and `remote-info` without
+              # --arch answers for the runner (x86_64) only. An aarch64 image
+              # could otherwise ship preinstall entries that do not resolve on
+              # the device and this job would still pass. Each file declares
+              # the arches it is shipped on; the FIRST is the file's native
+              # arch and failures there are fatal, while a missing build on a
+              # secondary arch is a ::warning:: -- those entries are skipped on
+              # the device rather than being errors, and hard-failing on them
+              # would block the shared lists for every variant.
+              arches=$(sed -n 's/^# bluespin-arches: //p' "$flatpaks_file" | head -1)
+              arches=${arches:-x86_64}
+              primary=${arches%% *}
+              echo "arches: ${arches} (primary: ${primary})"
               while IFS= read -r app_id; do
                 branch=$(awk -v app="$app_id" '
                   $0 == "[Flatpak Preinstall " app "]" {found=1; next}
@@ -40,12 +53,25 @@ jobs:
                   echo "✗ $app_id: missing Branch= key"
                   exit 1
                 fi
-                info=$(flatpak remote-info --user flathub "${app_id}")
-                echo "${info}"
-                if grep -q "End-of-life" <<< "${info}"; then
-                  echo "✗ $app_id is end-of-life (renamed or unmaintained), update or remove it"
-                  exit 1
-                fi
+                for arch in ${arches}; do
+                  if ! info=$(flatpak remote-info --user --arch="${arch}" flathub "${app_id}" 2>&1); then
+                    # Print flatpak's own output either way: a network error
+                    # and a genuinely missing build exit the same, and only
+                    # the message tells them apart.
+                    echo "${info}"
+                    if [ "${arch}" = "${primary}" ]; then
+                      echo "✗ $app_id failed to resolve for ${arch}"
+                      exit 1
+                    fi
+                    echo "::warning::${app_id} is unavailable for ${arch} on Flathub and will be skipped on that architecture"
+                    continue
+                  fi
+                  echo "${info}"
+                  if grep -q "End-of-life" <<< "${info}"; then
+                    echo "✗ $app_id is end-of-life (renamed or unmaintained), update or remove it"
+                    exit 1
+                  fi
+                done
               done < <(sed -n 's/^\[Flatpak Preinstall \(.*\)\]$/\1/p' "$flatpaks_file")
               echo "::endgroup::"
             done
