@@ -76,7 +76,6 @@ source /ctx/build_files/extensions.sh
 install_vendored_extensions
 # Nothing on this base supplies Bluefin's vendored set, so bring our forks
 install_bluefin_replacement_extensions
-
 # The same set the shipping variants enable. Everything Bluefin would have
 # vendored is supplied above from our own forks instead; appindicator is the
 # one Fedora already packages at a revision declaring the current shell.
@@ -89,6 +88,7 @@ ENABLED_EXTENSIONS=(
     search-light@icedman.github.com
     weatherornot@somepaulo.github.io
 )
+assert_enabled_vendored_extensions "${ENABLED_EXTENSIONS[@]}"
 write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
 
 # Report what we are actually testing against, so the build log answers the

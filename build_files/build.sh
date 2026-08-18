@@ -95,7 +95,10 @@ dnf -y copr disable lorbus/network-displays
 source /ctx/build_files/extensions.sh
 install_vendored_extensions
 install_mosaicwm
-
+# Assert the shell coverage of what we actually enable. mosaicwm is installed
+# but never enabled by default on any variant, so a shell it does not declare is
+# a note in the compatibility report rather than a build failure -- which is
+# also what lets it ship unchanged on a newer shell.
 # Extensions enabled by default. The override sorts after the base's zz0
 # (which sets this key) and zz1 (per-extension settings), so it wins.
 #
@@ -126,6 +129,10 @@ if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
     ENABLED_EXTENSIONS+=(screen-rotate@shyzus.github.io)
 fi
 
+# Hard-assert shell coverage for the vendored subset of what we enable, then
+# render the override. Installed-but-disabled extensions (mosaicwm, nekotorch
+# here) are covered by the GNOME compatibility report in CI instead.
+assert_enabled_vendored_extensions "${ENABLED_EXTENSIONS[@]}"
 write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
 
 # DX Variant

@@ -82,7 +82,9 @@ Two extensions Fedora does not package are vendored here the same way, under
 
 Mosaic WM is the tiling extension, replacing Tiling Shell. It is plain
 JavaScript, so it needs no build step. Upstream declares `shell-version`
-`["50"]`, so it is installed only where that matches — it patches window
+`["50"]`. It ships disabled everywhere, and its shell coverage is tracked in
+the GNOME compatibility report each image workflow publishes rather than
+asserted at build time — it patches window
 management internals via `InjectionManager`, which is not something to declare
 compatible with a newer shell without running it.
 
