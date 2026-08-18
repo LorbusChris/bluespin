@@ -40,6 +40,9 @@ jobs:
             image_desc: "Bluespin DX"
           - image_name: bluespin-surface
             image_desc: "Bluespin for Microsoft Surface devices"
+          # bluespin-fp5 is deliberately absent. It is aarch64, builds from a
+          # different base and Containerfile, and needs an arm runner, so it
+          # has its own workflow in build-fp5.yml.
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
