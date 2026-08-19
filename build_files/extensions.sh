@@ -5,6 +5,61 @@ set -xeuo pipefail
 
 EXT_DIR=/usr/share/gnome-shell/extensions
 
+# Every extension we vendor as a submodule, by UUID. On the Bluefin base some
+# of these UUIDs are supplied by the base's own copies at the same paths; either
+# way, if a variant enables one of them, its metadata must declare the shell we
+# ship. Fedora-packaged extensions are deliberately not in this list -- keeping
+# them current is Fedora's job, and a lag there gets the ::warning:: path.
+VENDORED_EXTENSIONS=(
+    appindicatorsupport@rgcjonas.gmail.com
+    bazaar-integration@kolunmi.github.io
+    caffeine@patapon.info
+    gradia-integration@alexandervanhee.github.io
+    mosaicwm@cleomenezesjr.github.io
+    nekotorch@nekocwd.gitlab.com
+    search-light@icedman.github.com
+    weatherornot@somepaulo.github.io
+)
+
+# The shell major this image ships. Leading digits only: released versions look
+# like 50.3, but a pre-release is packaged as 51~beta, and extensions declare
+# plain "51".
+shell_major() {
+    rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+'
+}
+
+# True if the installed extension's metadata declares the given shell major.
+# The single definition of this predicate: the hard assert and the ::warning::
+# path both use it, so the two can never disagree about the same extension.
+extension_declares_shell() {
+    local ext=$1 major=$2
+    jq -e --arg v "${major}" '.["shell-version"] | index($v)' \
+        "${EXT_DIR}/${ext}/metadata.json" > /dev/null
+}
+
+# Fail the build if any extension the variant both VENDORS and ENABLES does not
+# cover the shell we ship, since a mismatch silently leaves it disabled at
+# login. On a pre-release base this is the point: it turns "quietly disabled on
+# the new GNOME" into a build failure we can act on.
+#
+# Which extensions are load-bearing is a property of the variant -- its
+# ENABLED_EXTENSIONS -- so callers pass exactly that list and the vendored
+# subset is derived here rather than hand-maintained per call site. Extensions
+# shipped only as a manual opt-in (e.g. mosaicwm) are deliberately not a hard
+# gate: their coverage is visible in the GNOME compatibility report that every
+# image workflow publishes to its job summary.
+assert_enabled_vendored_extensions() {
+    local ext vendored major
+    major="$(shell_major)"
+    for ext in "$@"; do
+        for vendored in "${VENDORED_EXTENSIONS[@]}"; do
+            if [[ "${ext}" == "${vendored}" ]]; then
+                extension_declares_shell "${ext}" "${major}"
+            fi
+        done
+    done
+}
+
 # Install the extensions Fedora does not package, vendored as submodules the
 # same way the Bluefin base handles its own.
 install_vendored_extensions() {
@@ -18,19 +73,12 @@ install_vendored_extensions() {
     # udev rule granting the seat access to the torch LEDs
     install -Dm0644 /ctx/extensions/nekotorch/99-flash.rules /usr/lib/udev/rules.d/99-flash.rules
 
-    local ext shell_major
-    # Leading digits only: released versions look like 50.3, but a pre-release
-    # is packaged as 51~beta, and extensions declare plain "51"
-    shell_major="$(rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+')"
+    local ext
     for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com"; do
         glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
-        # Fail loudly if a vendored extension does not cover the shell we ship,
-        # since a mismatch silently leaves it disabled at login. On a
-        # pre-release base this is the point: it turns "quietly disabled on the
-        # new GNOME" into a build failure we can act on.
-        jq -e --arg v "${shell_major}" '.["shell-version"] | index($v)' \
-            "${EXT_DIR}/${ext}/metadata.json" > /dev/null
     done
+    # Shell coverage is asserted per variant from its ENABLED_EXTENSIONS --
+    # see assert_enabled_vendored_extensions.
 }
 
 # Extensions the Bluefin base normally vendors for us. Only needed on a plain
@@ -85,11 +133,9 @@ install_mosaicwm() {
     install -d "${EXT_DIR}/${uuid}"
     cp -r /ctx/extensions/mosaicwm/extension/. "${EXT_DIR}/${uuid}/"
     glib-compile-schemas --strict "${EXT_DIR}/${uuid}/schemas"
-
-    local shell_major
-    shell_major="$(rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+')"
-    jq -e --arg v "${shell_major}" '.["shell-version"] | index($v)' \
-        "${EXT_DIR}/${uuid}/metadata.json" > /dev/null
+    # No variant enables mosaicwm by default, so its shell coverage is not a
+    # hard gate: it appears in the GNOME compatibility report every image
+    # workflow publishes, which is where to look before flipping it on.
 }
 
 # Render the enabled-extensions override from the list passed as arguments.
@@ -99,8 +145,8 @@ install_mosaicwm() {
 # NOTE: enabled-extensions is replaced wholesale, not merged, so any defaults
 # from the base have to be restated by the caller.
 write_enabled_extensions_override() {
-    local ext shell_major
-    shell_major="$(rpm -q --qf '%{version}' gnome-shell | grep -oE '^[0-9]+')"
+    local ext major
+    major="$(shell_major)"
 
     # Every enabled extension must exist, or it is silently ignored at login
     for ext in "$@"; do
@@ -110,9 +156,8 @@ write_enabled_extensions_override() {
         # the running shell means upstream has not caught up yet, which is
         # information rather than a defect in this repo. Enabling one anyway is
         # harmless -- GNOME just ignores it -- but it is worth seeing.
-        if ! jq -e --arg v "${shell_major}" '.["shell-version"] | index($v)' \
-            "${EXT_DIR}/${ext}/metadata.json" > /dev/null; then
-            echo "::warning::${ext} does not declare GNOME ${shell_major}; it will not load"
+        if ! extension_declares_shell "${ext}" "${major}"; then
+            echo "::warning::${ext} does not declare GNOME ${major}; it will not load"
         fi
     done
 

@@ -73,7 +73,14 @@ sudoif command *args:
     sudoif {{ command }} {{ args }}
 
 # Build the image using the specified parameters
-build $target_image=image_name $tag=default_tag:
+#
+# containerfile: variants whose base differs get their own file. Not because
+# FROM cannot be parametrized -- an ARG-driven FROM is standard -- but because a
+# literal FROM keeps each base digest-pinned where Renovate's dockerfile
+# manager bumps it, and the per-base build scripts are disjoint anyway.
+# arch: only for cross-arch variants; empty means the host arch, which is what
+# every amd64 variant wants.
+build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="":
     #!/usr/bin/env bash
     set -euox pipefail
 
@@ -87,7 +94,7 @@ build $target_image=image_name $tag=default_tag:
         GIT_SHA=$(git rev-parse --short HEAD)
         LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
         LABELS+=("--label" "org.opencontainers.image.documentation=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
-        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}/blob/${GIT_SHA}/Containerfile")
+        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}/blob/${GIT_SHA}/${containerfile}")
         LABELS+=("--label" "org.opencontainers.image.url=https://github.com/{{ repo_organization }}/{{ repo_name }}/tree/${GIT_SHA}")
         LABELS+=("--label" "org.opencontainers.image.version={{ default_tag }}.$(date +%Y%m%d)-${GIT_SHA}")
     fi
@@ -105,22 +112,23 @@ build $target_image=image_name $tag=default_tag:
     LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
 
     # This actually builds the image!
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile)
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${containerfile}")
+
+    # Cross-arch builds need qemu-user-static with binfmt registered on an x86
+    # host and take hours; CI uses native arm64 runners, where this is a no-op
+    # that keeps the recipe honest about what it is producing.
+    if [[ -n "${arch}" ]]; then
+        PODMAN_BUILD_ARGS+=("--arch" "${arch}")
+    fi
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 
-# Build the experimental rawhide/GNOME 51 test image
+# Build the experimental rawhide/GNOME 51 test image. Routed through `build`
+# so it gets the same OCI/ArtifactHub labels as every other image; the env
+# override supplies its description.
 build-rawhide $target_image="bluespin-rawhide" $tag=default_tag:
-    #!/usr/bin/env bash
-    set -euox pipefail
-
-    podman build \
-      --build-arg "IMAGE_NAME=${target_image}" \
-      --label "org.opencontainers.image.title=${target_image}" \
-      --label "org.opencontainers.image.description=Experimental bluespin on Fedora rawhide" \
-      --pull=newer \
-      --tag "${target_image}:${tag}" \
-      --file Containerfile.rawhide .
+    IMAGE_DESC="Experimental bluespin on Fedora rawhide" \
+        just build "{{ target_image }}" "{{ tag }}" Containerfile.rawhide
 
 # Split the image for smaller updates (New)!
 rechunk $target_image=image_name $tag=default_tag:

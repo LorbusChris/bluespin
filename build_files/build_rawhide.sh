@@ -38,11 +38,11 @@ dnf -y install \
     gnome-shell-extension-just-perfection \
     gnome-shell-extension-screen-autorotate
 
-# uupd (the update daemon Bluefin uses instead of rpm-ostreed-automatic) and
-# ujust both build for F45 in ublue's COPR even though their images do not.
-dnf -y copr enable ublue-os/packages
-dnf -y install uupd ublue-os-just
-dnf -y copr disable ublue-os/packages
+# uupd and ujust. They build in ublue's COPR for releases their images do not
+# cover, which is what makes a plain-Fedora bluespin possible at all.
+# shellcheck source=build_files/silverblue_base.sh
+source /ctx/build_files/silverblue_base.sh
+install_ublue_tools
 
 # Our own COPR extensions, same as the shipping variants
 dnf -y copr enable lorbus/network-displays
@@ -55,28 +55,17 @@ dnf -y copr disable lorbus/network-displays
 source /ctx/build_files/signing.sh
 install_signing_policy
 
-# Flatpaks. Bluefin gets these via common's flatpak-preinstall.service; on a
-# plain base neither the remote nor the unit exists, so supply both. Bazaar and
-# Gradia come from here -- without them the bazaar/gradia integration
-# extensions are enabled but have nothing to integrate with.
-# Declared in /etc rather than `flatpak remote-add`, whose state lands in
-# /var/lib/flatpak and is wiped by the cleanup at the end of this script
-install -d /etc/flatpak/remotes.d
-curl -fsSL -o /etc/flatpak/remotes.d/flathub.flatpakrepo \
-    https://flathub.org/repo/flathub.flatpakrepo
-install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
+# Flatpaks. Bazaar and Gradia come from here -- without them the bazaar/gradia
+# integration extensions are enabled but have nothing to integrate with.
+install_flathub_and_preinstall \
     /ctx/files/usr/share/flatpak/preinstall.d/bluespin.preinstall \
     /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
-install -Dm0644 /ctx/files/usr/lib/systemd/system/bluespin-flatpak-preinstall.service \
-    /usr/lib/systemd/system/bluespin-flatpak-preinstall.service
-systemctl enable bluespin-flatpak-preinstall.service
 
 # shellcheck source=build_files/extensions.sh
 source /ctx/build_files/extensions.sh
 install_vendored_extensions
 # Nothing on this base supplies Bluefin's vendored set, so bring our forks
 install_bluefin_replacement_extensions
-
 # The same set the shipping variants enable. Everything Bluefin would have
 # vendored is supplied above from our own forks instead; appindicator is the
 # one Fedora already packages at a revision declaring the current shell.
@@ -89,6 +78,7 @@ ENABLED_EXTENSIONS=(
     search-light@icedman.github.com
     weatherornot@somepaulo.github.io
 )
+assert_enabled_vendored_extensions "${ENABLED_EXTENSIONS[@]}"
 write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
 
 # Report what we are actually testing against, so the build log answers the
@@ -101,6 +91,4 @@ for ext in "${EXT_DIR}"/*/; do
 done
 
 # Cleanup
-dnf clean all
-find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
-find /var/cache/* -maxdepth 0 -type d \! -name libdnf5 \! -name rpm-ostree -exec rm -fr {} \;
+cleanup_silverblue_image
