@@ -1,0 +1,38 @@
+# Mobile defaults for bluespin-fp5, installed by build_files/build_fp5.sh.
+#
+# Sorts after zz2-bluespin-extensions, which only sets
+# org.gnome.shell/enabled-extensions. GLib merges overrides per key, so reusing
+# the [org.gnome.shell] group here would not clobber that -- but nothing here
+# needs to.
+
+[org.gnome.desktop.a11y.applications]
+# The single most important key on this image. Without it GNOME's on-screen
+# keyboard never appears and a device with no physical keyboard has no text
+# input at all -- including at the password prompt.
+screen-keyboard-enabled=true
+
+[org.gnome.desktop.interface]
+show-battery-percentage=true
+
+[org.gnome.mutter]
+# Fractional scaling. A phone panel needs a non-integer scale to be legible,
+# and monitors.xml uses <layoutmode>logical</layoutmode>, which requires this.
+experimental-features=['scale-monitor-framebuffer']
+# Edge tiling on a screen that fits one window is only ever an accident.
+edge-tiling=false
+
+[org.gnome.desktop.session]
+# Blank quickly; this is a battery-powered device that lives in a pocket.
+idle-delay=uint32 60
+
+[org.gnome.settings-daemon.plugins.power]
+sleep-inactive-battery-timeout=300
+sleep-inactive-ac-timeout=900
+power-button-action='suspend'
+
+[org.gnome.desktop.screensaver]
+lock-delay=uint32 0
+
+[org.gnome.desktop.notifications]
+# A phone lock screen is seen by whoever picks it up.
+show-in-lock-screen=false

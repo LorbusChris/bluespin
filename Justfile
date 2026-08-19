@@ -10,6 +10,22 @@ export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
 export chunkah_image := env_var("CHUNKAH_IMAGE")
 
+# Flashable disk images (bluespin-fp5 only). env() rather than env_var() so a
+# local run works without editing bluespin.env. The default image ref derives
+# from REPO_ORGANIZATION rather than hardcoding an owner: on a fork, a
+# hardcoded ref would silently pull and flash upstream's published image
+# instead of the operator's own build.
+export disk_device := env("DISK_DEVICE", "fairphone-fp5")
+export disk_image_ref := env("DISK_IMAGE_REF", "ghcr.io/" + lowercase(repo_organization) + "/bluespin-fp5:rawhide")
+export image_builder_image := env_var("IMAGE_BUILDER_IMAGE")
+# NOT pocketblue's release setting of `-mmt=1 -md=1500m`: a 1500 MB LZMA2
+# dictionary needs an order of magnitude more RAM to compress, single-threaded,
+# and would thrash a hosted runner. The unused partition space is zeros and
+# compresses to nothing either way, so the archive tracks content size.
+export disk_compression_7z := env("DISK_COMPRESSION_7Z", "-mmt=on")
+
+import "tools/disk_images.just"
+
 [private]
 default:
     @just --list
@@ -79,8 +95,9 @@ sudoif command *args:
 # literal FROM keeps each base digest-pinned where Renovate's dockerfile
 # manager bumps it, and the per-base build scripts are disjoint anyway.
 # arch: only for cross-arch variants; empty means the host arch, which is what
-# every amd64 variant wants.
-build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="":
+# every amd64 variant wants. Trailing arguments are passed to podman verbatim,
+# for variant-specific --build-arg.
+build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="" *extra_args:
     #!/usr/bin/env bash
     set -euox pipefail
 
@@ -121,7 +138,16 @@ build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $
         PODMAN_BUILD_ARGS+=("--arch" "${arch}")
     fi
 
-    podman build "${PODMAN_BUILD_ARGS[@]}" .
+    podman build "${PODMAN_BUILD_ARGS[@]}" {{ extra_args }} .
+
+# Build the Fairphone 5 image (aarch64)
+#
+# fedora_branch selects the base. Only branches where @mobility/gnome-mobile
+# publishes a mobile gnome-shell can produce a working image: rawhide and f43
+# today, not f44. build_fp5.sh checks this up front and fails immediately.
+build-fp5 $tag=default_tag $fedora_branch="rawhide":
+    just build bluespin-fp5 {{ tag }} Containerfile.fp5 arm64 \
+        --build-arg "FEDORA_BRANCH={{ fedora_branch }}"
 
 # Build the experimental rawhide/GNOME 51 test image. Routed through `build`
 # so it gets the same OCI/ArtifactHub labels as every other image; the env

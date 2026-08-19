@@ -22,6 +22,9 @@ jobs:
           - bluespin
           - bluespin-dx
           - bluespin-surface
+          # bluespin-fp5 is deliberately absent. A live installer ISO is
+          # meaningless for a phone that is flashed with fastboot, and this job
+          # is x86-only (see the -live-amd64 names below).
 
     steps:
       - name: Maximize build space

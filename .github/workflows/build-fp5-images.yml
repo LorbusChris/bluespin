@@ -1,0 +1,131 @@
+---
+# Flashable disk images for the Fairphone 5, built from a published
+# bluespin-fp5 container.
+#
+# workflow_dispatch only for now: this is a ~10 GiB job and nothing should run
+# it on a schedule until a flash has actually been proven on hardware.
+name: Build Bluespin FP5 disk image
+# workflow_call deliberately absent until something actually calls this --
+# a dead trigger is a second copy of the input schema to keep in sync and an
+# invitation to assume automation exists. Add it in the same PR as the first
+# caller.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'bluespin-fp5 tag to build from'
+        type: string
+        required: true
+        default: 'rawhide'
+      release_id:
+        description: 'optional release to upload the archive to'
+        type: string
+        required: false
+
+env:
+  IMAGE_NAME: bluespin-fp5
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  disk:
+    name: Build FP5 disk image
+    # 24.04, NOT 26.04. pocketblue moved every job to 26.04-arm and then moved
+    # the disk-image job specifically back (pocketblue d729297); the container
+    # jobs stayed. Do not rediscover that.
+    runs-on: ubuntu-24.04-arm
+
+    permissions:
+      # write, not read: the optional release-asset upload at the end attaches
+      # the archive to a release, which needs it -- with read the whole job
+      # succeeds and then 403s on the final step.
+      contents: write
+
+    steps:
+      # No submodules: this job never builds the container, it pulls one.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Peak disk here is the pulled image plus disk.raw plus the split rootfs.
+      # Most of what this removes is x86-only toolchain absent on an arm runner.
+      - name: Maximize build space
+        continue-on-error: true
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          extra-squeeze: true
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      # The input goes through env, not ${{ }} interpolation inside the
+      # script: a crafted tag would otherwise inject shell into the run block.
+      # The heredoc write keeps a newline-carrying value contained to one
+      # variable instead of appending extra NAME=value lines to GITHUB_ENV.
+      - name: Prepare environment
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
+          {
+            echo "DISK_IMAGE_REF<<__EOV__"
+            echo "${IMAGE_REGISTRY,,}/${IMAGE_NAME}:${TAG}"
+            echo "__EOV__"
+          } >> "${GITHUB_ENV}"
+
+      # Must be sudo: `just disk` bind-mounts /var/lib/containers/storage, which
+      # is root's. A rootless pull puts the image where image-builder cannot
+      # see it.
+      - name: Pull the container image
+        run: sudo podman pull "${DISK_IMAGE_REF}"
+
+      - name: Build disk image
+        run: sudo --preserve-env=PATH,DISK_IMAGE_REF $(which just) disk
+
+      # Reclaim before the postprocess/archive steps; the split rootfs and the
+      # archive still have to fit. Nothing needs any container image from here
+      # on, so remove them all -- a plain prune would skip the tagged
+      # image-builder image, the largest thing left.
+      - name: Reclaim space
+        run: |
+          sudo podman rmi --all --force || true
+
+      - name: Post-process
+        run: |
+          sudo --preserve-env=PATH $(which just) postprocess
+          sudo chown -R "$(id -u):$(id -g)" output/
+
+      # The contracts that decide whether this flashes at all (exact ESP size,
+      # this device's DTB present on it) live in the device's device.conf and
+      # tools/postprocess/verify-images.sh, so the identical check runs in a
+      # local bring-up flow -- not just here.
+      - name: Verify the images
+        run: sudo --preserve-env=PATH $(which just) verify-images
+
+      - name: Collect artifacts
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          # The sudo runs above leave root-owned temp scripts here, which the
+          # unprivileged just below cannot write (pocketblue 36e77ba).
+          sudo rm -rf "/run/user/$(id -u)/just"
+          just artifacts
+          mv "${IMAGE_NAME}.7z" "${IMAGE_NAME}-${TAG}.7z"
+          ls -l out/images/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.IMAGE_NAME }}-${{ inputs.tag }}
+          path: ${{ env.IMAGE_NAME }}-${{ inputs.tag }}.7z
+          compression-level: 0
+
+      - name: Upload release artifact
+        if: ${{ inputs.release_id }}
+        uses: svenstaro/upload-release-action@81c65b7cd4de9b2570615ce3aad67a41de5b1a13 # v2.11.2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          release_id: ${{ inputs.release_id }}
+          file: ${{ env.IMAGE_NAME }}-${{ inputs.tag }}.7z
