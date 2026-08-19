@@ -79,8 +79,9 @@ sudoif command *args:
 # literal FROM keeps each base digest-pinned where Renovate's dockerfile
 # manager bumps it, and the per-base build scripts are disjoint anyway.
 # arch: only for cross-arch variants; empty means the host arch, which is what
-# every amd64 variant wants.
-build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="":
+# every amd64 variant wants. Trailing arguments are passed to podman verbatim,
+# for variant-specific --build-arg.
+build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="" *extra_args:
     #!/usr/bin/env bash
     set -euox pipefail
 
@@ -121,7 +122,16 @@ build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $
         PODMAN_BUILD_ARGS+=("--arch" "${arch}")
     fi
 
-    podman build "${PODMAN_BUILD_ARGS[@]}" .
+    podman build "${PODMAN_BUILD_ARGS[@]}" {{ extra_args }} .
+
+# Build the Fairphone 5 image (aarch64)
+#
+# fedora_branch selects the base. Only branches where @mobility/gnome-mobile
+# publishes a mobile gnome-shell can produce a working image: rawhide and f43
+# today, not f44. build_fp5.sh checks this up front and fails immediately.
+build-fp5 $tag=default_tag $fedora_branch="rawhide":
+    just build bluespin-fp5 {{ tag }} Containerfile.fp5 arm64 \
+        --build-arg "FEDORA_BRANCH={{ fedora_branch }}"
 
 # Build the experimental rawhide/GNOME 51 test image. Routed through `build`
 # so it gets the same OCI/ArtifactHub labels as every other image; the env

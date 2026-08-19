@@ -1,0 +1,41 @@
+# bluespin for the Fairphone 5 (SC7280 / QCM6490 / Kodiak, aarch64).
+#
+# A bluespin image that runs on FP5 hardware: the device layer under devices/
+# is copied from pocketblue, but what the image contains is bluespin's own.
+# See build_files/build_fp5.sh.
+
+# Which Fedora to build against. Only branches where @mobility/gnome-mobile
+# publishes a mobile gnome-shell can produce a working image -- rawhide and f43
+# today, not f44. build_fp5.sh gates on this and fails in seconds rather than
+# after a full build, so a branch without one is a fast red rather than a slow
+# one.
+ARG FEDORA_BRANCH="rawhide"
+
+# Allow build scripts to be referenced without being copied into the final image
+FROM scratch AS ctx
+COPY /build_files /build_files
+COPY /files /files
+COPY /extensions /extensions
+COPY /devices /devices
+COPY /cosign.pub /cosign.pub
+
+# Base Image: Fedora's own desktop, which unlike Bluefin publishes aarch64.
+# ghcr.io/ublue-os/bluefin is a single amd64 manifest, not an index, and
+# ublue-os/bluefin#755 (arm64 support) is still open -- so there is no Bluefin
+# to build on here at all.
+#
+# NOTE: deliberately a tag rather than a digest. The image is built as a matrix
+# over FEDORA_BRANCH, so the base cannot be pinned to one digest the way
+# Containerfile and Containerfile.rawhide are. quay also tags rawhide with
+# expires-after=4w.
+ARG FEDORA_BRANCH
+FROM quay.io/fedora-ostree-desktops/silverblue:${FEDORA_BRANCH} AS base
+
+FROM base
+
+RUN --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=bind,from=ctx,source=/,target=/ctx \
+    /ctx/build_files/build_fp5.sh
+
+RUN bootc container lint
