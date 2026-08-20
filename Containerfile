@@ -8,7 +8,7 @@ COPY /extensions /extensions
 COPY /cosign.pub /cosign.pub
 
 # Base Image
-FROM ghcr.io/ublue-os/bluefin:latest@sha256:115fc6c4fdb481c1e432cfee7bce557b78dfa1b05b17e8df45674fc1142631cb AS base
+FROM ghcr.io/ublue-os/bluefin:latest@sha256:4c07bfdb3e50d706b7892485cd1324e1010ff7f6e977bcf0de347995d184aa0b AS base
 ## bluefin, not bluefin-dx: the developer layer is re-created for the dx
 ## variant only, in build_files/dx.sh, so the other two images do not carry it.
 ## Other possible base images include:
