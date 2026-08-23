@@ -18,6 +18,7 @@ VENDORED_EXTENSIONS=(
     mosaicwm@cleomenezesjr.github.io
     nekotorch@nekocwd.gitlab.com
     search-light@icedman.github.com
+    system-monitor@gnome-shell-extensions.gcampax.github.com
     weatherornot@somepaulo.github.io
 )
 
@@ -73,8 +74,40 @@ install_vendored_extensions() {
     # udev rule granting the seat access to the torch LEDs
     install -Dm0644 /ctx/extensions/nekotorch/99-flash.rules /usr/lib/udev/rules.d/99-flash.rules
 
+    # System Monitor: GNOME's own top-bar indicator, from our fork of
+    # gnome-shell-extensions, patched to open Mission Center. The stock copy
+    # (Fedora's gnome-shell-extension-system-monitor) only looks up GNOME
+    # System Monitor, which the Bluefin base hides and this image removes --
+    # either way the indicator then hides itself too.
+    #
+    # Upstream renders metadata.json from metadata.json.in at meson configure
+    # time; do the same substitution here, declaring the shell this image
+    # ships. That is only honest while the fork tracks the shell we build
+    # against: the extension is identical between upstream's gnome-50 branch
+    # and main (51), which is what lets one pin serve both the shipping
+    # variants and the rawhide image.
+    local gse=/ctx/extensions/gnome-shell-extensions
+    local sm_uuid="system-monitor@gnome-shell-extensions.gcampax.github.com"
+    install -d "${EXT_DIR}/${sm_uuid}"
+    cp -r "${gse}"/extensions/system-monitor/{extension.js,stylesheet.css,icons,schemas} \
+        "${EXT_DIR}/${sm_uuid}/"
+    sed -e "s|@uuid@|${sm_uuid}|" \
+        -e "s|@gschemaname@|org.gnome.shell.extensions.system-monitor|" \
+        -e "s|@gettext_domain@|gnome-shell-extensions|" \
+        -e "s|@shell_current@|$(shell_major)|" \
+        -e "s|@version@|$(sed -n "s/^  version: '\(.*\)',$/\1/p" "${gse}/meson.build")|" \
+        -e "s|@url@|https://gitlab.gnome.org/lorbus/gnome-shell-extensions|" \
+        "${gse}/extensions/system-monitor/metadata.json.in" \
+        > "${EXT_DIR}/${sm_uuid}/metadata.json"
+    # Fail here rather than at login if a placeholder went unreplaced
+    if grep -qE '@[a-z_]+@' "${EXT_DIR}/${sm_uuid}/metadata.json"; then
+        echo "unreplaced placeholder in ${sm_uuid}/metadata.json" >&2
+        return 1
+    fi
+
     local ext
-    for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com"; do
+    for ext in "weatherornot@somepaulo.github.io" "nekotorch@nekocwd.gitlab.com" \
+        "${sm_uuid}"; do
         glib-compile-schemas --strict "${EXT_DIR}/${ext}/schemas"
     done
     # Shell coverage is asserted per variant from its ENABLED_EXTENSIONS --
