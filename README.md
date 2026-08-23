@@ -82,53 +82,69 @@ entry against Flathub on PRs, and fails on end-of-life or renamed apps.
 
 ## GNOME Shell extensions
 
-Most extensions come from Fedora RPMs, or from the Bluefin base, which vendors
-several as git submodules pinned to branches matching the shell it ships — the
-build deliberately does not install Fedora's RPMs for those, so the base's
-copies survive (see the note in [build.sh](build_files/build.sh)).
+Every extension we enable comes from a source we control, installed the same
+way on every base. The ones Fedora does not package -- or packages behind the
+shell we ship -- are vendored as git submodules under
+[extensions/](extensions/); on a Bluefin base that replaces the base's own
+copies of the same extensions, so one pin serves every branch:
 
-A few extensions are vendored here the same way, under
-[extensions/](extensions/):
-
-| Extension | Upstream fork | Why vendored |
+| Extension | Source | Why vendored |
 | --- | --- | --- |
+| AppIndicator | [ubuntu/gnome-shell-extension-appindicator](https://github.com/ubuntu/gnome-shell-extension-appindicator) | upstream, pinned by us |
+| Bazaar Companion | [LorbusChris/bazaar-companion](https://github.com/LorbusChris/bazaar-companion) | not packaged by Fedora |
+| Caffeine | [LorbusChris/gnome-shell-extension-caffeine](https://github.com/LorbusChris/gnome-shell-extension-caffeine) | fork declaring the current shell |
+| Gradia Capture | [LorbusChris/gradia-capture](https://github.com/LorbusChris/gradia-capture) | not packaged by Fedora |
+| Search Light | [LorbusChris/search-light](https://github.com/LorbusChris/search-light) | fork declaring the current shell |
 | Weather or Not | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not) | dropped from Fedora after F43 |
 | NekoTorch | [gitlab.com/lorbus42](https://gitlab.com/lorbus42/NekoTorch) | only packaged in a COPR targeting shell 48 |
-| Mosaic WM | [CleoMenezesJr/MosaicWM](https://github.com/CleoMenezesJr/MosaicWM) | not packaged anywhere |
+| Mosaic WM | [CleoMenezesJr/MosaicWM](https://github.com/CleoMenezesJr/MosaicWM), pinned twice (`main` for GNOME 50, `gnome-51` for 51) | not packaged anywhere |
 | System Monitor | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extensions) | Fedora's build only opens GNOME System Monitor; the fork prefers Mission Center and adds CPU, GPU and disk temperature readouts |
+
+Network Displays comes as an RPM from our own
+[lorbus/network-displays](https://copr.fedorainfracloud.org/coprs/lorbus/network-displays/)
+COPR, and Screen Rotate is Fedora's `gnome-shell-extension-screen-autorotate`.
+
+What is enabled by default is one table, `enabled_extensions_for_platform`
+in [extensions.sh](build_files/extensions.sh), rendered into
+`zz2-bluespin-extensions.gschema.override` at build time:
+
+| Enabled on | Extensions |
+| --- | --- |
+| every platform | AppIndicator, Bazaar Companion, Caffeine, Gradia Capture, Network Displays, Search Light |
+| `bluespin`, `bluespin-dx`, `bluespin-surface` | Weather or Not |
+| `bluespin-dx` | System Monitor, Mosaic WM |
+| `bluespin-surface` | Screen Rotate |
+
+Enabled means successfully enabled: the build fails if an extension of ours
+that a platform enables does not declare the shell the image ships (an
+extension that does not is silently left off at login); for Fedora's it
+warns. Everything vendored is installed on every platform regardless, so an
+extension a platform does not enable is one toggle away. Bluefin's
+`blur-my-shell`, `dash-to-dock`, `gsconnect` and `logomenu` are deliberately
+left off, as are `just-perfection` and the Fedora default (GNOME Classic) set.
 
 System Monitor is GNOME's own top-bar indicator from `gnome-shell-extensions`,
 replacing Fedora's `gnome-shell-extension-system-monitor` RPM. The stock
 extension hides itself when `org.gnome.SystemMonitor.desktop` is not found,
 which on the Bluefin base (where that file is hidden) or here (where the RPM
-is gone) means it never shows; the fork looks for Mission Center first. Upstream renders its `metadata.json`
-with meson, so the build does the equivalent substitution itself, declaring
-the shell the image ships — the extension's code is identical between
-upstream's `gnome-50` branch and `main`, so one pin serves both the 44 and
-the rawhide legs.
+is gone) means it never shows; the fork looks for Mission Center first.
+Upstream renders its `metadata.json` with meson, so the build does the
+equivalent substitution itself, declaring the shell the image ships — the
+extension's code is identical between upstream's `gnome-50` branch and
+`main`, so one pin serves both the 44 and the rawhide legs.
 
 Mosaic WM is the tiling extension, replacing Tiling Shell. It is plain
-JavaScript, so it needs no build step. Upstream declares `shell-version`
-`["50"]`. It ships disabled everywhere, and its shell coverage is tracked in
-the GNOME compatibility report each image workflow publishes rather than
-asserted at build time — it patches window
-management internals via `InjectionManager`, which is not something to declare
-compatible with a newer shell without running it.
+JavaScript, so it needs no build step. Upstream develops each shell on its
+own branch -- `main` declares `["50"]`, `gnome-51` declares `["51"]` -- and
+the two have diverged too far for one pin, so both are vendored
+(`extensions/mosaicwm` tracks `main`, `extensions/mosaicwm-gnome-51` tracks
+`gnome-51`) and the build takes the one for the shell the image ships. A
+shell with no pin fails the build.
 
 Clone with `--recurse-submodules`. Bump them with
-`git submodule update --remote`; every enabled extension must declare support
-for the shell version the image ships, which the build enforces.
+`git submodule update --remote`.
 
-Which extensions are on by default is the `ENABLED_EXTENSIONS` list in
-[build.sh](build_files/build.sh), rendered into
-`zz2-bluespin-extensions.gschema.override` at build time. `screen-rotate` is
-added on `bluespin-surface` only; everything else is the same across variants.
-Bluefin's `blur-my-shell`, `dash-to-dock`, `gsconnect` and `logomenu` are
-deliberately left off, as are `nekotorch`, `mosaicwm`, `just-perfection`,
-`system-monitor` and the Fedora default (GNOME Classic) set — all shipped,
-none enabled.
-
-GSettings overrides **replace** the key rather than merging, so that list
+GSettings overrides **replace** the key rather than merging, so the table
 restates Bluefin's defaults — new extensions Bluefin enables upstream will not
 appear here automatically.
 

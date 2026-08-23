@@ -22,6 +22,11 @@
 [submodule "extensions/mosaicwm"]
 	path = extensions/mosaicwm
 	url = https://github.com/CleoMenezesJr/MosaicWM.git
+	branch = main
 [submodule "extensions/gnome-shell-extensions"]
 	path = extensions/gnome-shell-extensions
 	url = https://gitlab.gnome.org/lorbus/gnome-shell-extensions.git
+[submodule "extensions/mosaicwm-gnome-51"]
+	path = extensions/mosaicwm-gnome-51
+	url = https://github.com/CleoMenezesJr/MosaicWM.git
+	branch = gnome-51

@@ -160,21 +160,15 @@ ADDITIONAL_FEDORA_PACKAGES=(
     nethogs
 
     # Custom GNOME Shell Extensions
-    # NOTE: appindicator, blur-my-shell, caffeine, dash-to-dock and gsconnect
-    # are NOT listed here on purpose. Bluefin vendors them as git submodules
-    # pinned to branches that track the shell version it ships, and installing
-    # Fedora's RPMs would overwrite those copies at the same paths. The
-    # versions happen to match today, but Fedora's blur-my-shell build already
-    # declares one shell version less than Bluefin's, so the RPM would break it
-    # first on a GNOME major bump. (gsconnect also arrives as an RPM in the
-    # base, pulled in by nautilus-gsconnect.) On a plain Fedora base nothing
-    # vendors them, so section 5 installs our forks of the ones we enable.
+    # NOTE: no RPM for anything in VENDORED_EXTENSIONS (extensions.sh):
+    # appindicator, caffeine and the rest are installed from our own vendored
+    # sources in section 5, on every base, and an RPM at the same path would
+    # fight that copy. Fedora's blur-my-shell, dash-to-dock and gsconnect are
+    # not installed either -- we do not enable them (gsconnect still arrives
+    # in the Bluefin base via nautilus-gsconnect).
     gnome-shell-extension-just-perfection # installed, not enabled by default
     #gnome-shell-extension-network-displays
-    gnome-shell-extension-screen-autorotate
-    # weather-or-not and nekotorch are vendored as submodules below: Fedora
-    # dropped the weather-or-not package after F43, and nekotorch is only
-    # packaged in a COPR that still targets shell 48
+    gnome-shell-extension-screen-autorotate # Screen Rotate; enabled on surface
 
     # Default GNOME Shell Extensions
     # https://src.fedoraproject.org/rpms/gnome-shell-extensions
@@ -240,56 +234,27 @@ install_signing_policy
 # 5. GNOME Shell extensions
 ############################################################################
 
-# Extensions Fedora does not package, vendored as submodules the same way the
-# Bluefin base handles the ones it bundles.
+# Every extension we vendor, from our sources, on every base -- replacing the
+# Bluefin base's own copies of the ones it bundles, so one pin serves every
+# branch (see VENDORED_EXTENSIONS in extensions.sh).
 install_vendored_extensions
 
-# Bluefin vendors appindicator, caffeine, search-light and the bazaar/gradia
-# integrations for us. On a plain Fedora base nothing does, so bring our forks
-# of the ones we enable.
-if ! base_is_ublue; then
-    install_bluefin_replacement_extensions
-fi
-
-# Installed on every image, enabled by default on none: a shell it does not
-# declare is a note in the compatibility report rather than a build failure,
-# which is also what lets it ship unchanged on a newer shell.
-install_mosaicwm
-
-# Extensions enabled by default. The override sorts after the base's zz0
-# (which sets this key) and zz1 (per-extension settings), so it wins.
+# What this platform enables is the table in extensions.sh; nothing is
+# decided here. The override sorts after the base's zz0 (which sets this key)
+# and zz1 (per-extension settings), so it wins.
 #
 # NOTE: enabled-extensions is replaced wholesale, not merged, so Bluefin's
-# defaults have to be restated here -- extensions Bluefin enables upstream will
-# NOT reach this image until added below. Diff against zz0-bluefin-
-# modifications.gschema.override in projectbluefin/common when rebasing onto a
-# new Bluefin.
-#
-# Dropped from Bluefin's defaults on purpose: blur-my-shell, dash-to-dock,
-# gsconnect and logomenu.
-# Installed but deliberately left off: nekotorch (only useful on hardware with
-# a torch LED), mosaicwm, just-perfection, system-monitor, and the Fedora
-# default (GNOME Classic) set.
-ENABLED_EXTENSIONS=(
-    appindicatorsupport@rgcjonas.gmail.com
-    bazaar-integration@kolunmi.github.io
-    caffeine@patapon.info
-    network-displays@gnome.org
-    gradia-integration@alexandervanhee.github.io
-    search-light@icedman.github.com
-    weatherornot@somepaulo.github.io
-)
+# defaults do NOT carry over -- an extension Bluefin enables upstream reaches
+# this image only through the table. Dropped from Bluefin's defaults on
+# purpose: blur-my-shell, dash-to-dock, gsconnect and logomenu. Diff against
+# zz0-bluefin-modifications.gschema.override in projectbluefin/common when
+# rebasing onto a new Bluefin.
+mapfile -t ENABLED_EXTENSIONS < <(enabled_extensions_for_platform "${IMAGE_NAME}")
 
-# Screen auto-rotation is only useful on the convertible Surface hardware; the
-# extension ships on every variant so it can still be enabled by hand.
-if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
-    ENABLED_EXTENSIONS+=(screen-rotate@shyzus.github.io)
-fi
-
-# Hard-assert shell coverage for the vendored subset of what we enable, then
-# render the override. Installed-but-disabled extensions (mosaicwm, nekotorch
-# here) are covered by the GNOME compatibility report in CI instead.
-assert_enabled_vendored_extensions "${ENABLED_EXTENSIONS[@]}"
+# "Enabled" has to mean "successfully enabled": every extension in the list
+# must be installed and declare the shell this image ships. Ours fail the
+# build, Fedora's warn -- see assert_enabled_extensions.
+assert_enabled_extensions "${ENABLED_EXTENSIONS[@]}"
 write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
 
 ############################################################################
