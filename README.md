@@ -104,6 +104,15 @@ GSettings overrides **replace** the key rather than merging, so that list
 restates Bluefin's defaults — new extensions Bluefin enables upstream will not
 appear here automatically.
 
+## Trash launcher
+
+[trash.desktop](files/usr/share/applications/trash.desktop) adds a "Trash"
+entry to the app grid that opens `trash:///` in Files. Its name and comment
+are the strings of GTK's own sidebar Trash entry, so the build localises it
+from the image's `gtk40` catalogs with
+[desktop-translations.py](build_files/desktop-translations.py) rather than
+keeping a copy of the translations here.
+
 ## The developer layer
 
 All variants build on `ghcr.io/ublue-os/bluefin`, not `bluefin-dx`, so the two

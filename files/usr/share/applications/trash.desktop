@@ -1,7 +1,10 @@
 [Desktop Entry]
 Type=Application
+# Name and Comment are the msgids of GTK's own places-sidebar Trash entry;
+# their translations are appended at build time from the gtk40 catalogs
+# (see build.sh). Keep them verbatim.
 Name=Trash
-Comment=Browse and restore deleted files
+Comment=Open the trash
 # A separate Nautilus window on the trash:/// location. Deliberately no
 # StartupWMClass: with one set to org.gnome.Nautilus, the shell would match
 # every Files window to this entry instead of org.gnome.Nautilus.desktop.
