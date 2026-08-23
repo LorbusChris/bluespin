@@ -4,32 +4,96 @@
     'config:best-practices',
   ],
   rebaseWhen: 'never',
-  // Vendored GNOME Shell extensions in extensions/. Renovate's submodule
-  // manager is off by default; it follows each submodule's tracked branch
-  // (see .gitmodules), so our forks get bumped as we push to them.
+  // One submodule remains: kmods/v4l2loopback. Renovate's submodule manager
+  // is off by default; it follows the tracked branch in .gitmodules.
   'git-submodules': {
     enabled: true,
   },
   customManagers: [
     {
+      // The Starship release the image installs. Renovate bumps the version;
+      // the build then fails on the pinned hashes until a human updates them,
+      // which is deliberate -- see the note in build_files/starship.sh.
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^build_files/starship\\.sh$/',
+      ],
+      matchStrings: [
+        'STARSHIP_VERSION=(?<currentValue>v[0-9][0-9.]*)',
+      ],
+      datasourceTemplate: 'github-releases',
+      depNameTemplate: 'starship/starship',
+    },
+    {
       customType: 'regex',
       managerFilePatterns: [
         '/^bluespin\\.env$/',
+        '/^files/etc/profile\\.d/97-bluespin-container-clis\\.sh$/',
       ],
       matchStrings: [
         '[A-Z0-9_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)',
       ],
       datasourceTemplate: 'docker',
     },
+    {
+      // The vendored GNOME Shell extension sources: each pinned to an exact
+      // commit the build fetches as a forge tarball. git-refs follows the
+      // named branch (our forks patch on their default branch); the build's
+      // shell-version assert is the gate on every bump. The same pattern
+      // matches the *_UPSTREAM_COMMIT watcher lines for tagless upstreams.
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^build_files/extensions\\.sh$/',
+      ],
+      matchStrings: [
+        '# renovate: datasource=git-refs depName=(?<depName>\\S+) branch=(?<currentValue>\\S+)\\n[A-Z0-9_]+_COMMIT=(?<currentDigest>[a-f0-9]{40})',
+      ],
+      datasourceTemplate: 'git-refs',
+    },
+    {
+      // Tag-tracked extension sources: AppIndicator consumes upstream's
+      // tags directly (ref + the tag's commit, which the build fetches);
+      // the *_UPSTREAM_REF lines only watch a fork's upstream for movement.
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^build_files/extensions\\.sh$/',
+      ],
+      matchStrings: [
+        '# renovate: datasource=github-tags depName=(?<depName>\\S+)\\n[A-Z0-9_]+_REF=(?<currentValue>\\S+)\\n[A-Z0-9_]+_COMMIT=(?<currentDigest>[a-f0-9]{40})',
+        '# renovate: datasource=github-tags depName=(?<depName>\\S+)\\n[A-Z0-9_]+_UPSTREAM_REF=(?<currentValue>\\S+)',
+      ],
+      datasourceTemplate: 'github-tags',
+    },
+    {
+      // Upstream watcher for the gnome-shell-extensions fork: GNOME's own
+      // tags on their GitLab. A 51.x tag appearing is the rebase signal.
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^build_files/extensions\\.sh$/',
+      ],
+      matchStrings: [
+        '# renovate: datasource=gitlab-tags depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\n[A-Z0-9_]+_UPSTREAM_REF=(?<currentValue>\\S+)',
+      ],
+      datasourceTemplate: 'gitlab-tags',
+    },
   ],
   packageRules: [
     {
-      // A vendored extension is only safe to bump if it still declares the
+      // A pinned extension is only safe to bump if it still declares the
       // shell we ship -- the build asserts exactly that, so let CI be the
-      // gate rather than merging these unreviewed.
-      description: 'Never automerge vendored extension bumps',
+      // gate rather than merging these unreviewed. Upstream watcher bumps
+      // are signals for a human by definition. The kmod submodule bump
+      // rebuilds the module against the shipped kernel, same reasoning.
+      description: 'Never automerge extension or kmod bumps',
       matchManagers: [
         'git-submodules',
+      ],
+      automerge: false,
+    },
+    {
+      description: 'Never automerge extension pin or upstream-watcher bumps',
+      matchFileNames: [
+        'build_files/extensions.sh',
       ],
       automerge: false,
     },

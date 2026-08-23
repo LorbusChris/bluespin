@@ -124,8 +124,8 @@ jobs:
 
       # What every installed extension declares against the shell this image
       # ships. This is the visibility mechanism for installed-but-disabled
-      # extensions (e.g. mosaicwm), whose shell coverage is deliberately not a
-      # hard build gate -- see assert_enabled_vendored_extensions in
+      # extensions, whose shell coverage is deliberately not a hard build gate
+      # -- only what a platform enables is, see assert_enabled_extensions in
       # build_files/extensions.sh. Informational: must never block the build.
       - name: Report GNOME compatibility
         if: always()
