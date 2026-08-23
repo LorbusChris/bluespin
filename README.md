@@ -157,8 +157,17 @@ Requires `just` and `podman`.
 
 ```bash
 just build bluespin            # or bluespin-dx / bluespin-surface
+just build-rawhide             # the experimental image, on Fedora's rawhide base
 just rechunk bluespin          # optional: split into update-friendly layers
 ```
+
+Every image comes from the one [Containerfile](Containerfile): the base is
+passed in as `BASE_IMAGE` from [bluespin.env](bluespin.env), where the digests
+are pinned and Renovate tracks them, and
+[build.sh](build_files/build.sh) is the single entry point. It branches on
+`IMAGE_NAME` for the variant and detects the base it is on -- a Universal Blue
+base already ships uupd, ujust, Homebrew and the flatpak preinstall service,
+plain Silverblue gets them from [silverblue_base.sh](build_files/silverblue_base.sh).
 
 CI builds all three variants daily and on every push to `main`
 (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).

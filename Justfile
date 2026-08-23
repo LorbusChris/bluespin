@@ -9,6 +9,8 @@ export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
 export chunkah_image := env_var("CHUNKAH_IMAGE")
+export base_image := env_var("BASE_IMAGE")
+export rawhide_base_image := env_var("RAWHIDE_BASE_IMAGE")
 
 [private]
 default:
@@ -80,21 +82,24 @@ sudoif command *args:
 # manager bumps it, and the per-base build scripts are disjoint anyway.
 # arch: only for cross-arch variants; empty means the host arch, which is what
 # every amd64 variant wants.
-build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="":
+build $target_image=image_name $tag=default_tag $base=base_image $arch="":
     #!/usr/bin/env bash
     set -euox pipefail
 
     BUILD_ARGS=()
     LABELS=()
 
-    # The Containerfile branches on IMAGE_NAME to build the variant
+    # One Containerfile for every image: the base comes in as BASE_IMAGE
+    # (pinned in bluespin.env) and build.sh branches on IMAGE_NAME for the
+    # variant
+    BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base}")
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${target_image##*/}")
 
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
         LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
         LABELS+=("--label" "org.opencontainers.image.documentation=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
-        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}/blob/${GIT_SHA}/${containerfile}")
+        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}/blob/${GIT_SHA}/Containerfile")
         LABELS+=("--label" "org.opencontainers.image.url=https://github.com/{{ repo_organization }}/{{ repo_name }}/tree/${GIT_SHA}")
         LABELS+=("--label" "org.opencontainers.image.version={{ default_tag }}.$(date +%Y%m%d)-${GIT_SHA}")
     fi
@@ -112,7 +117,7 @@ build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $
     LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
 
     # This actually builds the image!
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${containerfile}")
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile)
 
     # Cross-arch builds need qemu-user-static with binfmt registered on an x86
     # host and take hours; CI uses native arm64 runners, where this is a no-op
@@ -123,12 +128,13 @@ build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 
-# Build the experimental rawhide/GNOME 51 test image. Routed through `build`
-# so it gets the same OCI/ArtifactHub labels as every other image; the env
-# override supplies its description.
+# Build the experimental rawhide/GNOME 51 test image: the same Containerfile
+# and build.sh on Fedora's own rawhide base instead of Bluefin. Routed through
+# `build` so it gets the same OCI/ArtifactHub labels as every other image; the
+# env override supplies its description.
 build-rawhide $target_image="bluespin-rawhide" $tag=default_tag:
     IMAGE_DESC="Experimental bluespin on Fedora rawhide" \
-        just build "{{ target_image }}" "{{ tag }}" Containerfile.rawhide
+        just build "{{ target_image }}" "{{ tag }}" "{{ rawhide_base_image }}"
 
 # Split the image for smaller updates (New)!
 rechunk $target_image=image_name $tag=default_tag:
