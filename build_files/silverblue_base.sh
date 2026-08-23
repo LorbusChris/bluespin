@@ -1,10 +1,7 @@
 #!/bin/bash
-# Bootstrap shared by every bluespin image built on a plain Fedora Silverblue
-# base rather than on Bluefin (bluespin-rawhide, bluespin-fp5).
-#
-# Only the parts whose "why" is not obvious from reading them live here. Package
-# lists and extension sets stay with the caller: they legitimately differ per
-# image, and sharing them would immediately grow IMAGE_NAME guards.
+# What build.sh supplies on a plain Fedora Silverblue base that a Universal
+# Blue base would have shipped already (bluespin-rawhide today). build.sh
+# detects the base and calls these; nothing here is variant-specific.
 set -xeuo pipefail
 
 # uupd (the update daemon Bluefin uses instead of rpm-ostreed-automatic) and

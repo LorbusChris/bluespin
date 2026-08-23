@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared container signing policy, sourced by build.sh and build_rawhide.sh.
+# Container signing policy, sourced by build.sh for every image.
 # Every image we publish is cosign-signed, so every image we publish must also
 # know how to verify its own updates.
 set -xeuo pipefail

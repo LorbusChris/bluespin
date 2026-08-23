@@ -1,13 +1,124 @@
 #!/bin/bash
+# The entry point for every bluespin image. The Containerfile runs this on
+# whatever base `just build` passed in as BASE_IMAGE, and two things decide what
+# happens here:
+#
+#   IMAGE_NAME  the variant: bluespin, bluespin-dx, bluespin-surface or
+#               bluespin-rawhide. Chooses the content layered on top.
+#
+#   the base    detected, not declared. A Universal Blue base (Bluefin) already
+#               ships uupd, ujust, Homebrew, the flatpak preinstall service and
+#               its own vendored GNOME extensions; plain Fedora Silverblue ships
+#               none of them, so they are supplied here instead. Everything
+#               that follows the bootstrap is the same on either.
+#
+# The sections are numbered because their order carries dependencies: the
+# signing policy needs jq, the extension override needs every enabled
+# extension installed, the variant layers build on all of it, and cleanup
+# must be last.
 set -xeuo pipefail
 
-# Flatpaks are installed by flatpak-preinstall.service (enabled in the bluefin
-# base) from /usr/share/flatpak/preinstall.d. Note: preinstall tracks these
-# entries, so removing one later uninstalls the app from users' systems.
-install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
-    /ctx/files/usr/share/flatpak/preinstall.d/bluespin.preinstall \
+# shellcheck source=build_files/signing.sh
+source /ctx/build_files/signing.sh
+# shellcheck source=build_files/extensions.sh
+source /ctx/build_files/extensions.sh
+# shellcheck source=build_files/silverblue_base.sh
+source /ctx/build_files/silverblue_base.sh
+
+# Universal Blue images carry their identity here (image-name, base, flavor);
+# Fedora's own images have nothing of the kind. This is the property the
+# base-specific blocks below actually depend on, so it is what gets tested.
+base_is_ublue() {
+    [[ -f /usr/share/ublue-os/image-info.json ]]
+}
+
+# dnf5 fails a remove for a package that is not installed, and the bases differ
+# in what they ship. These are "must not be in the image" removals, so a package
+# that was never there is the desired state, not an error -- unlike installs,
+# which deliberately run without --skip-unavailable so a missing package fails
+# the build.
+remove_if_installed() {
+    local pkg present=()
+    for pkg in "$@"; do
+        if rpm -q "${pkg}" >/dev/null 2>&1; then
+            present+=("${pkg}")
+        fi
+    done
+    if [[ ${#present[@]} -gt 0 ]]; then
+        dnf -y remove "${present[@]}"
+    fi
+}
+
+############################################################################
+# 1. The base: take what it provides, supply what it does not.
+############################################################################
+
+# Flatpaks are installed at boot from /usr/share/flatpak/preinstall.d. Note:
+# preinstall tracks these entries, so removing one later uninstalls the app
+# from users' systems.
+PREINSTALL_FILES=(
+    /ctx/files/usr/share/flatpak/preinstall.d/bluespin.preinstall
     /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
-install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
+)
+
+if base_is_ublue; then
+    # The base enables flatpak-preinstall.service and ships the Flathub remote;
+    # only the entries are ours
+    install -Dm0644 -t /usr/share/flatpak/preinstall.d/ "${PREINSTALL_FILES[@]}"
+    install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
+
+    # Remove the base's brew-preinstall mechanism (a user service that installs
+    # Homebrew packages from the network at first login). Its system-cli tools
+    # (fzf, htop, rclone, tmux, starship, ...) are already in the image as RPMs or
+    # binaries shipped by the base, so brew was only shadowing them in PATH;
+    # bluefinctl (manages bluefin channels/rebases that don't apply to this image)
+    # and the chairlift cask are dropped entirely.
+    rm -f /usr/share/ublue-os/homebrew/preinstall.d/*.Brewfile \
+        /usr/lib/systemd/user/brew-preinstall.service \
+        /usr/lib/systemd/user-preset/01-brew-preinstall.preset
+
+    # The base's dx flatpak Brewfile is superseded by our preinstall.d set; our
+    # own system-flatpaks.Brewfile ships as a stub that masks the base's copy so
+    # `ujust install-system-flatpaks` stays a working no-op
+    rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
+else
+    # Plain Fedora Silverblue. Universal Blue publishes nothing above F44 --
+    # base-main, silverblue-main, akmods and bluefin all stop there -- which is
+    # why the rawhide image lands here, and why it deliberately does WITHOUT:
+    #
+    #   * the negativo17 multimedia stack (full ffmpeg/mesa/VA-API, versionlocked
+    #     by ublue-os/main): no f45 tree exists, so expect degraded H.264/H.265/AAC
+    #     playback and hardware video decode
+    #   * kmod-v4l2loopback: ublue's akmods have no F45 build, and their kmod RPM
+    #     names embed the exact kernel EVR they were built against, so nothing
+    #     exists for rawhide's kernel. (Provenance is not the problem -- ublue
+    #     rebuilds Fedora's own kernel RPMs under the same NVR, adding only a
+    #     Secure Boot signature, so their kmods do match a stock Fedora kernel of
+    #     the same version; they just need their MOK enrolled to load under Secure
+    #     Boot.) RPMFusion's akmod builds per-kernel but is unsigned.
+    #   * the DX layer (docker-ce has no f45 build either), Bluefin's nine bundled
+    #     extensions (our forks stand in, see section 5), branding and the
+    #     Homebrew stack
+    #
+    # What it does get is everything below: our packages, our extensions, and
+    # the shell-version assertion that turns "silently disabled on the new
+    # GNOME" into a build failure -- which is what the rawhide image exists to
+    # find out.
+
+    # uupd and ujust, from ublue's COPR, which builds for releases their images
+    # do not cover -- what makes a plain-Fedora bluespin possible at all
+    install_ublue_tools
+
+    # Neither the Flathub remote nor the preinstall unit exists here, so supply
+    # both along with the entries. Bazaar and Gradia come from these -- without
+    # them the bazaar/gradia integration extensions would have nothing to
+    # integrate with.
+    install_flathub_and_preinstall "${PREINSTALL_FILES[@]}"
+fi
+
+############################################################################
+# 2. Launchers
+############################################################################
 
 # A "Trash" launcher in the app grid that opens trash:/// in Files; GNOME
 # itself only reaches the trash through the Files sidebar. Its Name and
@@ -17,28 +128,14 @@ install -Dm0644 -t /usr/share/applications/ /ctx/files/usr/share/applications/tr
 /ctx/build_files/desktop-translations.py /usr/share/applications/trash.desktop gtk40 \
     Name=Trash Comment="Open the trash"
 
-# Remove the base's brew-preinstall mechanism (a user service that installs
-# Homebrew packages from the network at first login). Its system-cli tools
-# (fzf, htop, rclone, tmux, starship, ...) are already in the image as RPMs or
-# binaries shipped by the base, so brew was only shadowing them in PATH;
-# bluefinctl (manages bluefin channels/rebases that don't apply to this image)
-# and the chairlift cask are dropped entirely.
-rm -f /usr/share/ublue-os/homebrew/preinstall.d/*.Brewfile \
-    /usr/lib/systemd/user/brew-preinstall.service \
-    /usr/lib/systemd/user-preset/01-brew-preinstall.preset
+############################################################################
+# 3. Packages
+############################################################################
 
-# The base's dx flatpak Brewfile is superseded by our preinstall.d set; our
-# own system-flatpaks.Brewfile ships as a stub that masks the base's copy so
-# `ujust install-system-flatpaks` stays a working no-op
-rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
-
-# shellcheck source=build_files/signing.sh
-source /ctx/build_files/signing.sh
-install_signing_policy
-
-# gnome-system-monitor: replaced by the Mission Center flatpak (the base only
-# hides its desktop file; nothing else depends on the RPM)
-dnf -y remove \
+# gnome-system-monitor: replaced by the Mission Center flatpak (Bluefin only
+# hides its desktop file; nothing else depends on the RPM). Bluefin ships
+# gnome-tweaks, Silverblue does not; neither image gets it.
+remove_if_installed \
     gnome-tweaks \
     gnome-system-monitor
 
@@ -47,6 +144,11 @@ ADDITIONAL_FEDORA_PACKAGES=(
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
     mozilla-openh264
+
+    # Bluefin ships both; Silverblue ships jq only. jq is needed by the signing
+    # policy below, just by ujust.
+    jq
+    just
 
     # Mission Center (preinstalled flatpak, replacing gnome-system-monitor
     # above) gets its per-app network usage from nethogs on the host. The
@@ -61,10 +163,8 @@ ADDITIONAL_FEDORA_PACKAGES=(
     # versions happen to match today, but Fedora's blur-my-shell build already
     # declares one shell version less than Bluefin's, so the RPM would break it
     # first on a GNOME major bump. (gsconnect also arrives as an RPM in the
-    # base, pulled in by nautilus-gsconnect.) If this image is ever rebased off
-    # a base that does not vendor them (fedora-bootc, centos-bootc, ...), add
-    # them back here -- four of the five are in Bluefin's default
-    # enabled-extensions list.
+    # base, pulled in by nautilus-gsconnect.) On a plain Fedora base nothing
+    # vendors them, so section 5 installs our forks of the ones we enable.
     gnome-shell-extension-just-perfection # installed, not enabled by default
     #gnome-shell-extension-network-displays
     gnome-shell-extension-screen-autorotate
@@ -120,20 +220,38 @@ setcap 'cap_net_admin,cap_net_raw,cap_dac_read_search,cap_sys_ptrace+pe' /usr/bi
 # drop them without setcap noticing
 getcap /usr/bin/nethogs | grep -q 'cap_net_raw'
 
+# Our own COPR extension. Enable/install/disable so no COPR is left active in
+# the shipped image.
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
 
-# GNOME Shell extensions vendored as submodules, the same way the Bluefin base
-# handles the extensions Fedora does not package.
-# shellcheck source=build_files/extensions.sh
-source /ctx/build_files/extensions.sh
+############################################################################
+# 4. Signing. Every image we publish is cosign-signed, so every image must
+#    also know how to verify its own updates.
+############################################################################
+install_signing_policy
+
+############################################################################
+# 5. GNOME Shell extensions
+############################################################################
+
+# Extensions Fedora does not package, vendored as submodules the same way the
+# Bluefin base handles the ones it bundles.
 install_vendored_extensions
+
+# Bluefin vendors appindicator, caffeine, search-light and the bazaar/gradia
+# integrations for us. On a plain Fedora base nothing does, so bring our forks
+# of the ones we enable.
+if ! base_is_ublue; then
+    install_bluefin_replacement_extensions
+fi
+
+# Installed on every image, enabled by default on none: a shell it does not
+# declare is a note in the compatibility report rather than a build failure,
+# which is also what lets it ship unchanged on a newer shell.
 install_mosaicwm
-# Assert the shell coverage of what we actually enable. mosaicwm is installed
-# but never enabled by default on any variant, so a shell it does not declare is
-# a note in the compatibility report rather than a build failure -- which is
-# also what lets it ship unchanged on a newer shell.
+
 # Extensions enabled by default. The override sorts after the base's zz0
 # (which sets this key) and zz1 (per-extension settings), so it wins.
 #
@@ -169,6 +287,10 @@ fi
 # here) are covered by the GNOME compatibility report in CI instead.
 assert_enabled_vendored_extensions "${ENABLED_EXTENSIONS[@]}"
 write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
+
+############################################################################
+# 6. Variant layers
+############################################################################
 
 # DX Variant
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
@@ -273,8 +395,28 @@ EOF
 
 fi
 
-# Cleanup
-dnf clean all
+############################################################################
+# 7. Report what this image was built against, so the build log answers the
+#    question the rawhide image exists to ask -- and every other image's log
+#    answers it for free.
+############################################################################
+echo "=== built against gnome-shell $(rpm -q --qf '%{version}-%{release}' gnome-shell) on $(rpm -E %fedora) ==="
+for ext in "${EXT_DIR}"/*/; do
+    [[ -f "${ext}/metadata.json" ]] || continue
+    jq -r --arg u "$(basename "${ext}")" \
+        '"  \($u): shell-version \(.["shell-version"] | join(","))"' "${ext}/metadata.json"
+done
 
-find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
-find /var/cache/* -maxdepth 0 -type d \! -name libdnf5 \! -name rpm-ostree -exec rm -fr {} \;
+############################################################################
+# 8. Cleanup. Last, always.
+############################################################################
+if base_is_ublue; then
+    dnf clean all
+
+    find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
+    find /var/cache/* -maxdepth 0 -type d \! -name libdnf5 \! -name rpm-ostree -exec rm -fr {} \;
+else
+    # A plain base also needs /boot emptied and /var/tmp recreated for
+    # `bootc container lint` to pass; see silverblue_base.sh
+    cleanup_silverblue_image
+fi

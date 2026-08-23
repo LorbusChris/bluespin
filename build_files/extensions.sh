@@ -1,6 +1,6 @@
 #!/bin/bash
-# Shared GNOME Shell extension handling, sourced by build.sh and
-# build_rawhide.sh so both bases install and enable the same set the same way.
+# GNOME Shell extension handling, sourced by build.sh so every base installs
+# and enables the same set the same way.
 set -xeuo pipefail
 
 EXT_DIR=/usr/share/gnome-shell/extensions
