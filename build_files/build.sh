@@ -9,6 +9,14 @@ install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
     /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
 install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
 
+# A "Trash" launcher in the app grid that opens trash:/// in Files; GNOME
+# itself only reaches the trash through the Files sidebar. Its Name and
+# Comment are the strings of GTK's own sidebar Trash entry, so the launcher
+# is localised from the gtk40 catalogs the image already ships.
+install -Dm0644 -t /usr/share/applications/ /ctx/files/usr/share/applications/trash.desktop
+/ctx/build_files/desktop-translations.py /usr/share/applications/trash.desktop gtk40 \
+    Name=Trash Comment="Open the trash"
+
 # Remove the base's brew-preinstall mechanism (a user service that installs
 # Homebrew packages from the network at first login). Its system-cli tools
 # (fzf, htop, rclone, tmux, starship, ...) are already in the image as RPMs or
