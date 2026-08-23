@@ -1,4 +1,15 @@
 ---
+# Every platform on every Fedora branch: the matrix below is
+# platform (bluespin, bluespin-dx, bluespin-surface) x fedora_branch. The
+# branch is the image tag -- bluespin:44, bluespin-dx:rawhide -- and the
+# default branch (DEFAULT_FEDORA_BRANCH in bluespin.env) also carries `latest`
+# and the dated tags it always had, so nothing following `bluespin:latest`
+# changes. Each branch's base is pinned in bluespin.env; 44 builds on Bluefin,
+# the rest on Fedora's own Silverblue, and build.sh supplies what that base
+# lacks.
+#
+# A dispatch can name the branches to build, which is how a leg that is not
+# in the regular list gets built by hand.
 name: Build Bluespin container image
 on:
   pull_request:
@@ -12,6 +23,12 @@ on:
     paths-ignore:
       - '**/README.md'
   workflow_dispatch:
+    inputs:
+      fedora_branches:
+        description: 'Fedora branches to build, as a JSON array'
+        type: string
+        required: false
+        default: '["44", "45", "rawhide"]'
 
 env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
@@ -22,7 +39,8 @@ concurrency:
 
 jobs:
   build_push:
-    name: Build and push image
+    # f44 / rawhide -- not frawhide
+    name: ${{ matrix.platform }} on ${{ matrix.fedora_branch == 'rawhide' && 'rawhide' || format('f{0}', matrix.fedora_branch) }}
     runs-on: ubuntu-24.04
 
     permissions:
@@ -33,13 +51,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform:
+          - bluespin
+          - bluespin-dx
+          - bluespin-surface
+        # The branches every run builds and, on main, publishes. Trim this list
+        # to choose the legs that run in CI; a dispatch can ask for any other.
+        fedora_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.fedora_branches || '["44", "45", "rawhide"]') }}
         include:
-          - image_name: bluespin
+          - platform: bluespin
             image_desc: "Bluespin"
-          - image_name: bluespin-dx
+          - platform: bluespin-dx
             image_desc: "Bluespin DX"
-          - image_name: bluespin-surface
+          - platform: bluespin-surface
             image_desc: "Bluespin for Microsoft Surface devices"
+        # Not a CI-cost choice but an impossibility: linux-surface publishes
+        # for f43 only, and its iptsd build needs libspdlog.so.1.15, which
+        # Fedora 45 and later no longer ship. 44 still installs the f43 build
+        # (see the pin in build.sh). Lift this when linux-surface catches up.
+        exclude:
+          - platform: bluespin-surface
+            fedora_branch: '45'
+          - platform: bluespin-surface
+            fedora_branch: rawhide
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
@@ -66,24 +100,18 @@ jobs:
         run: |
           # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
-          # The matrix variant overrides the bluespin.env defaults
-          echo "IMAGE_NAME=${{ matrix.image_name }}" >> ${GITHUB_ENV}
+          # The matrix leg overrides the bluespin.env defaults
+          echo "IMAGE_NAME=${{ matrix.platform }}" >> ${GITHUB_ENV}
           echo "IMAGE_DESC=${{ matrix.image_desc }}" >> ${GITHUB_ENV}
+          echo "FEDORA_BRANCH=${{ matrix.fedora_branch }}" >> ${GITHUB_ENV}
 
-      - name: Default Tag
-        id: gen-default-tag
-        run: |
-          DEFAULT_TAG=$(just generate-default-tag)
-
-          echo "DEFAULT_TAG=${DEFAULT_TAG}" >> $GITHUB_ENV
-
-      # This actually builds the container image
+      # This actually builds the container image, tagged with the branch
       - name: Build Image
         id: build-image
         run: |
           just build \
-            ${IMAGE_NAME} \
-            ${DEFAULT_TAG}
+            "${IMAGE_NAME}" \
+            "${FEDORA_BRANCH}"
 
       # This provides smaller delta updates, using the distro-agnostic
       # rechunker: https://github.com/coreos/chunkah
@@ -91,8 +119,8 @@ jobs:
         id: rechunk
         run: |
           just rechunk \
-            ${IMAGE_NAME} \
-            ${DEFAULT_TAG}
+            "${IMAGE_NAME}" \
+            "${FEDORA_BRANCH}"
 
       # What every installed extension declares against the shell this image
       # ships. This is the visibility mechanism for installed-but-disabled
@@ -105,29 +133,19 @@ jobs:
         run: |
           podman run --rm \
             -v "${PWD}/.github/scripts/report-extensions.sh:/tmp/report.sh:ro,Z" \
-            --entrypoint bash "${IMAGE_NAME}:${DEFAULT_TAG}" /tmp/report.sh \
+            --entrypoint bash "${IMAGE_NAME}:${FEDORA_BRANCH}" /tmp/report.sh \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate Build Tags
         id: gen-build-tags
         run: |
           alias_tags="$(just generate-build-tags \
-                        ${IMAGE_NAME} \
-                        ${DEFAULT_TAG})"
+                        "${IMAGE_NAME}" \
+                        "${FEDORA_BRANCH}")"
 
           echo "Tags for this Action..."
           echo "${alias_tags}"
           echo "alias_tags=${alias_tags}" >> $GITHUB_OUTPUT
-
-      - name: Tag Image
-        id: tag-images
-        env:
-          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
-        run: |
-          just tag-images \
-            "${IMAGE_NAME}" \
-            "${DEFAULT_TAG}" \
-            "${ALIAS_TAGS}"
 
       # These `if` statements are so that pull requests for your custom images do not make it publish any packages under your name without you knowing
       # They also check if the runner is on the default branch so that things like the merge queue (if you enable it), are going to work
@@ -139,6 +157,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Push once, then add every alias server-side. Pushing the same local
+      # image once per tag does not guarantee the same manifest digest, which
+      # would leave all but the last tag unsigned; copying between registry
+      # refs reuses the manifest, so every alias shares the one digest that is
+      # signed below.
       - name: Push To GHCR
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: push-image
@@ -146,13 +169,37 @@ jobs:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
         run: |
           set -euox pipefail
-          for tag in ${ALIAS_TAGS}; do
-            podman push --digestfile=/tmp/digestfile ${IMAGE_NAME}:${tag} ${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}
-          done
+          podman push --digestfile=/tmp/digestfile \
+            "${IMAGE_NAME}:${FEDORA_BRANCH}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${FEDORA_BRANCH}"
 
           digest=$(< /tmp/digestfile)
 
+          for tag in ${ALIAS_TAGS}; do
+            [[ "${tag}" == "${FEDORA_BRANCH}" ]] && continue
+            skopeo copy \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+          done
+
           echo "digest=${digest}" >> $GITHUB_OUTPUT
+
+      # Every alias must resolve to the digest about to be signed; fail after
+      # publishing but before signing rather than leave a tag unsigned.
+      - name: Verify the published tags
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for tag in ${ALIAS_TAGS}; do
+            got="$(skopeo inspect --no-tags --format '{{.Digest}}' \
+              "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}")"
+            [[ "${got}" == "${DIGEST}" ]] || {
+              echo "::error::${IMAGE_NAME}:${tag} is ${got}, expected ${DIGEST}"
+              exit 1
+            }
+          done
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2

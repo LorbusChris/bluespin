@@ -1,7 +1,7 @@
 #!/bin/bash
 # What build.sh supplies on a plain Fedora Silverblue base that a Universal
-# Blue base would have shipped already (bluespin-rawhide today). build.sh
-# detects the base and calls these; nothing here is variant-specific.
+# Blue base would have shipped already (the 45 and rawhide legs). build.sh
+# detects the base and calls these; nothing here is platform-specific.
 set -xeuo pipefail
 
 # uupd (the update daemon Bluefin uses instead of rpm-ostreed-automatic) and

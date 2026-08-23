@@ -12,6 +12,14 @@ Custom [bootc](https://bootc-dev.github.io/bootc/) images based on
 | `ghcr.io/lorbuschris/bluespin-dx` | Adds the developer layer ([dx.sh](build_files/dx.sh)) plus packaging tools |
 | `ghcr.io/lorbuschris/bluespin-surface` | Replaces the kernel with [linux-surface](https://github.com/linux-surface/linux-surface)'s `kernel-surface` + `iptsd` for Microsoft Surface devices |
 
+Each platform is built per Fedora branch, and the branch is the tag:
+`bluespin:44`, `bluespin-dx:rawhide`. `latest` is an alias for the default
+branch (44). 44 builds on Bluefin; 45 and rawhide build on Fedora's own
+Silverblue, since Universal Blue publishes nothing above 44, and the build
+supplies what that base lacks. Which branches CI builds is the matrix in
+[build.yml](.github/workflows/build.yml); the rawhide legs exist to find out
+what breaks on the next GNOME before it ships.
+
 ## Switching to bluespin
 
 From an existing bootc/atomic Fedora system:
@@ -96,8 +104,8 @@ which on the Bluefin base (where that file is hidden) or here (where the RPM
 is gone) means it never shows; the fork looks for Mission Center first. Upstream renders its `metadata.json`
 with meson, so the build does the equivalent substitution itself, declaring
 the shell the image ships — the extension's code is identical between
-upstream's `gnome-50` branch and `main`, so one pin serves both the shipping
-variants and the rawhide image.
+upstream's `gnome-50` branch and `main`, so one pin serves both the 44 and
+the rawhide legs.
 
 Mosaic WM is the tiling extension, replacing Tiling Shell. It is plain
 JavaScript, so it needs no build step. Upstream declares `shell-version`
@@ -156,20 +164,20 @@ members to `libvirt` and `incus-admin`.
 Requires `just` and `podman`.
 
 ```bash
-just build bluespin            # or bluespin-dx / bluespin-surface
-just build-rawhide             # the experimental image, on Fedora's rawhide base
-just rechunk bluespin          # optional: split into update-friendly layers
+just build bluespin            # the default branch; or bluespin-dx / bluespin-surface
+just build bluespin-dx rawhide # any platform on any branch in bluespin.env
+just rechunk bluespin 44       # optional: split into update-friendly layers
 ```
 
-Every image comes from the one [Containerfile](Containerfile): the base is
-passed in as `BASE_IMAGE` from [bluespin.env](bluespin.env), where the digests
-are pinned and Renovate tracks them, and
+Every image comes from the one [Containerfile](Containerfile): the branch's
+base is passed in as `BASE_IMAGE` from [bluespin.env](bluespin.env), where the
+digests are pinned and Renovate tracks them, and
 [build.sh](build_files/build.sh) is the single entry point. It branches on
-`IMAGE_NAME` for the variant and detects the base it is on -- a Universal Blue
+`IMAGE_NAME` for the platform and detects the base it is on -- a Universal Blue
 base already ships uupd, ujust, Homebrew and the flatpak preinstall service,
 plain Silverblue gets them from [silverblue_base.sh](build_files/silverblue_base.sh).
 
-CI builds all three variants daily and on every push to `main`
+CI builds the matrix daily and on every push to `main`
 (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
 ## ISOs

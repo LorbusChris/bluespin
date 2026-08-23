@@ -3,14 +3,17 @@
 # whatever base `just build` passed in as BASE_IMAGE, and two things decide what
 # happens here:
 #
-#   IMAGE_NAME  the variant: bluespin, bluespin-dx, bluespin-surface or
-#               bluespin-rawhide. Chooses the content layered on top.
+#   IMAGE_NAME  the platform: bluespin, bluespin-dx or bluespin-surface.
+#               Chooses the content layered on top.
 #
-#   the base    detected, not declared. A Universal Blue base (Bluefin) already
-#               ships uupd, ujust, Homebrew, the flatpak preinstall service and
-#               its own vendored GNOME extensions; plain Fedora Silverblue ships
-#               none of them, so they are supplied here instead. Everything
-#               that follows the bootstrap is the same on either.
+#   the base    detected, not declared. Every platform is built per Fedora
+#               branch, and the branch picks the base (bluespin.env): Bluefin
+#               for 44, plain Fedora Silverblue for 45 and rawhide. A Universal
+#               Blue base already ships uupd, ujust, Homebrew, the flatpak
+#               preinstall service and its own vendored GNOME extensions;
+#               Silverblue ships none of them, so they are supplied here
+#               instead. Everything that follows the bootstrap is the same on
+#               either.
 #
 # The sections are numbered because their order carries dependencies: the
 # signing policy needs jq, the extension override needs every enabled
@@ -84,7 +87,8 @@ if base_is_ublue; then
 else
     # Plain Fedora Silverblue. Universal Blue publishes nothing above F44 --
     # base-main, silverblue-main, akmods and bluefin all stop there -- which is
-    # why the rawhide image lands here, and why it deliberately does WITHOUT:
+    # why the 45 and rawhide legs land here, and why they deliberately do
+    # WITHOUT:
     #
     #   * the negativo17 multimedia stack (full ffmpeg/mesa/VA-API, versionlocked
     #     by ublue-os/main): no f45 tree exists, so expect degraded H.264/H.265/AAC
@@ -100,9 +104,9 @@ else
     #     extensions (our forks stand in, see section 5), branding and the
     #     Homebrew stack
     #
-    # What it does get is everything below: our packages, our extensions, and
+    # What they do get is everything below: our packages, our extensions, and
     # the shell-version assertion that turns "silently disabled on the new
-    # GNOME" into a build failure -- which is what the rawhide image exists to
+    # GNOME" into a build failure -- which is what the rawhide leg exists to
     # find out.
 
     # uupd and ujust, from ublue's COPR, which builds for releases their images
@@ -397,7 +401,7 @@ fi
 
 ############################################################################
 # 7. Report what this image was built against, so the build log answers the
-#    question the rawhide image exists to ask -- and every other image's log
+#    question the rawhide leg exists to ask -- and every other leg's log
 #    answers it for free.
 ############################################################################
 echo "=== built against gnome-shell $(rpm -q --qf '%{version}-%{release}' gnome-shell) on $(rpm -E %fedora) ==="

@@ -84,8 +84,8 @@ install_vendored_extensions() {
     # time; do the same substitution here, declaring the shell this image
     # ships. That is only honest while the fork tracks the shell we build
     # against: the extension is identical between upstream's gnome-50 branch
-    # and main (51), which is what lets one pin serve both the shipping
-    # variants and the rawhide image.
+    # and main (51), which is what lets one pin serve both the 44 and the
+    # rawhide legs.
     local gse=/ctx/extensions/gnome-shell-extensions
     local sm_uuid="system-monitor@gnome-shell-extensions.gcampax.github.com"
     install -d "${EXT_DIR}/${sm_uuid}"

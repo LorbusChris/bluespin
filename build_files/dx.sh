@@ -72,7 +72,10 @@ DX_PACKAGES=(
     fd-find
     gh
     ripgrep
-    tealdeer
+    # tldr rather than tealdeer, Bluefin's pick: rust-tealdeer was retired
+    # from Fedora before 45 branched, and tldr is the same command from the
+    # Python client, on every branch.
+    tldr
     trash-cli
     uutils-coreutils
     ugrep
@@ -156,11 +159,14 @@ install -Dm0755 /ctx/files/usr/bin/bluespin-dx-groups /usr/bin/bluespin-dx-group
 install -Dm0644 /ctx/files/usr/lib/systemd/system/bluespin-dx-groups.service \
     /usr/lib/systemd/system/bluespin-dx-groups.service
 
-# ujust bluefin-cli fetches cli.Brewfile from Homebrew; most of that set is
-# now installed above as RPMs, so trim it to what Fedora does not package.
-# ublue-bling only aliases tools it can find, so the shell integration is
-# unaffected. brew itself is left alone for anyone who wants it.
-tee /usr/share/ublue-os/homebrew/cli.Brewfile << 'EOF'
+# The Brewfiles exist on a Bluefin base only; a plain Fedora base has no
+# Homebrew, and the RPMs above are the whole developer CLI set there.
+if [[ -d /usr/share/ublue-os/homebrew ]]; then
+    # ujust bluefin-cli fetches cli.Brewfile from Homebrew; most of that set is
+    # now installed above as RPMs, so trim it to what Fedora does not package.
+    # ublue-bling only aliases tools it can find, so the shell integration is
+    # unaffected. brew itself is left alone for anyone who wants it.
+    tee /usr/share/ublue-os/homebrew/cli.Brewfile << 'EOF'
 # Trimmed by bluespin-dx: everything else in this set ships as an RPM.
 tap "valkyrie00/bbrew"
 brew "atuin"
@@ -170,11 +176,12 @@ brew "dysk"
 brew "mise"
 EOF
 
-# Likewise ide.Brewfile: this image installs VS Code as an RPM from
-# Microsoft's repo, so the cask would be a second copy of the same editor.
-# The Insiders and VSCodium casks are separate products and stay.
-sed -i '/^cask "ublue-os\/tap\/visual-studio-code-linux"$/d' \
-    /usr/share/ublue-os/homebrew/ide.Brewfile
+    # Likewise ide.Brewfile: this image installs VS Code as an RPM from
+    # Microsoft's repo, so the cask would be a second copy of the same editor.
+    # The Insiders and VSCodium casks are separate products and stay.
+    sed -i '/^cask "ublue-os\/tap\/visual-studio-code-linux"$/d' \
+        /usr/share/ublue-os/homebrew/ide.Brewfile
+fi
 
 systemctl enable podman.socket
 systemctl enable libvirt-workaround.service

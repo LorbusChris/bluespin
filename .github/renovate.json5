@@ -17,7 +17,7 @@
         '/^bluespin\\.env$/',
       ],
       matchStrings: [
-        '[A-Z_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)',
+        '[A-Z0-9_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)',
       ],
       datasourceTemplate: 'docker',
     },
