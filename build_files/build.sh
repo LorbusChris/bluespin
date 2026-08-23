@@ -9,6 +9,10 @@ install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
     /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
 install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
 
+# A "Trash" launcher in the app grid that opens trash:/// in Files; GNOME
+# itself only reaches the trash through the Files sidebar
+install -Dm0644 -t /usr/share/applications/ /ctx/files/usr/share/applications/trash.desktop
+
 # Remove the base's brew-preinstall mechanism (a user service that installs
 # Homebrew packages from the network at first login). Its system-cli tools
 # (fzf, htop, rclone, tmux, starship, ...) are already in the image as RPMs or

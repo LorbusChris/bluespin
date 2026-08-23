@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Trash
+Comment=Browse and restore deleted files
+# A separate Nautilus window on the trash:/// location. Deliberately no
+# StartupWMClass: with one set to org.gnome.Nautilus, the shell would match
+# every Files window to this entry instead of org.gnome.Nautilus.desktop.
+Exec=nautilus --new-window trash:///
+Icon=user-trash
+Terminal=false
+StartupNotify=true
+Categories=GNOME;GTK;Utility;
+Keywords=trash;bin;wastebasket;recycle;deleted;files;restore;
