@@ -36,22 +36,22 @@ rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
 source /ctx/build_files/signing.sh
 install_signing_policy
 
-# Bluefin fixups
-if [[ -f /usr/share/applications/gnome-system-monitor.desktop ]]; then
-    sed -i '/^Hidden=true/d' /usr/share/applications/gnome-system-monitor.desktop
-fi
-if [[ -f /usr/share/applications/org.gnome.SystemMonitor.desktop ]]; then
-    sed -i '/^Hidden=true/d' /usr/share/applications/org.gnome.SystemMonitor.desktop
-fi
-
+# gnome-system-monitor: replaced by the Mission Center flatpak (the base only
+# hides its desktop file; nothing else depends on the RPM)
 dnf -y remove \
-    gnome-tweaks
+    gnome-tweaks \
+    gnome-system-monitor
 
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
     #thunderbird # for mDNS printer discovery
     firefox # for GSConnect and mDNS printer discovery
     mozilla-openh264
+
+    # Mission Center (preinstalled flatpak, replacing gnome-system-monitor
+    # above) gets its per-app network usage from nethogs on the host. The
+    # capabilities it needs are granted below, to wheel only.
+    nethogs
 
     # Custom GNOME Shell Extensions
     # NOTE: appindicator, blur-my-shell, caffeine, dash-to-dock and gsconnect
@@ -83,7 +83,9 @@ ADDITIONAL_FEDORA_PACKAGES=(
     gnome-shell-extension-places-menu
     gnome-shell-extension-screenshot-window-sizer
     gnome-shell-extension-status-icons
-    gnome-shell-extension-system-monitor
+    # system-monitor is vendored from our gnome-shell-extensions fork instead
+    # (see extensions.sh): the stock one only knows how to open GNOME System
+    # Monitor, which this image removes in favour of Mission Center
     gnome-shell-extension-user-theme
     gnome-shell-extension-window-list
     gnome-shell-extension-windowsNavigator
@@ -92,6 +94,31 @@ ADDITIONAL_FEDORA_PACKAGES=(
 
 dnf -y install \
     "${ADDITIONAL_FEDORA_PACKAGES[@]}"
+
+# Mission Center runs nethogs as the logged-in user (spawned on the host from
+# the flatpak), so it has to work without root:
+# https://gitlab.com/mission-center-devs/mission-center/-/wikis/Home/Nethogs
+# That takes file capabilities -- cap_net_admin/cap_net_raw for packet
+# capture, cap_dac_read_search/cap_sys_ptrace to map sockets to processes of
+# other users (root services) -- which, set on a world-executable binary, hand
+# every local account packet capture and unrestricted file reads. So the
+# binary is made executable by wheel only: its members already hold root
+# through sudo, so the capabilities grant them nothing new beyond skipping the
+# password prompt, while for everyone else nethogs is plain "permission
+# denied" and Mission Center simply shows no per-app network column. The
+# capabilities are stored as xattrs and ownership in the image, which ostree
+# preserves (the base already ships arping etc. with file caps this way).
+#
+# Ownership first: the kernel clears file capabilities when a file changes
+# owner or group (they are privilege bits, like setuid), so a setcap before
+# the chgrp is silently undone.
+chgrp wheel /usr/bin/nethogs
+chmod 0750 /usr/bin/nethogs
+setcap 'cap_net_admin,cap_net_raw,cap_dac_read_search,cap_sys_ptrace+pe' /usr/bin/nethogs
+# Fail here rather than ship a nethogs that cannot capture, should anything
+# else (a storage driver that cannot hold security.capability xattrs, say)
+# drop them without setcap noticing
+getcap /usr/bin/nethogs | grep -q 'cap_net_raw'
 
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
@@ -119,8 +146,8 @@ install_mosaicwm
 # Dropped from Bluefin's defaults on purpose: blur-my-shell, dash-to-dock,
 # gsconnect and logomenu.
 # Installed but deliberately left off: nekotorch (only useful on hardware with
-# a torch LED), mosaicwm, just-perfection, and the Fedora default (GNOME
-# Classic) set.
+# a torch LED), mosaicwm, just-perfection, system-monitor, and the Fedora
+# default (GNOME Classic) set.
 ENABLED_EXTENSIONS=(
     appindicatorsupport@rgcjonas.gmail.com
     bazaar-integration@kolunmi.github.io

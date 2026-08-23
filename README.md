@@ -48,7 +48,15 @@ keeps `full-desktop.Brewfile` as the single opt-in catalog. Deliberately
 excluded from Bluefin's current sets:
 
 - `org.mozilla.firefox` — Firefox is installed as an RPM instead
-- `io.missioncenter.MissionCenter`
+
+Mission Center (`io.missioncenter.MissionCenter`) is the system monitor, as
+on Bluefin; the `gnome-system-monitor` RPM (which the base merely hides) is
+removed. The `nethogs` RPM is installed for Mission Center's per-app network
+usage. It has to run without root, which takes file capabilities on the
+binary, so `/usr/bin/nethogs` is made executable by `wheel` only — its
+members already hold root through sudo, whereas world-executable capabilities
+would hand every local account packet capture and unrestricted file reads.
+See the note in [build.sh](build_files/build.sh).
 
 Because of the overwrite, new Bluefin Brewfile additions do not appear here
 automatically — diff against
@@ -71,7 +79,7 @@ several as git submodules pinned to branches matching the shell it ships — the
 build deliberately does not install Fedora's RPMs for those, so the base's
 copies survive (see the note in [build.sh](build_files/build.sh)).
 
-Two extensions Fedora does not package are vendored here the same way, under
+A few extensions are vendored here the same way, under
 [extensions/](extensions/):
 
 | Extension | Upstream fork | Why vendored |
@@ -79,6 +87,17 @@ Two extensions Fedora does not package are vendored here the same way, under
 | Weather or Not | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not) | dropped from Fedora after F43 |
 | NekoTorch | [gitlab.com/lorbus42](https://gitlab.com/lorbus42/NekoTorch) | only packaged in a COPR targeting shell 48 |
 | Mosaic WM | [CleoMenezesJr/MosaicWM](https://github.com/CleoMenezesJr/MosaicWM) | not packaged anywhere |
+| System Monitor | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extensions) | Fedora's build only opens GNOME System Monitor; the fork prefers Mission Center and adds CPU, GPU and disk temperature readouts |
+
+System Monitor is GNOME's own top-bar indicator from `gnome-shell-extensions`,
+replacing Fedora's `gnome-shell-extension-system-monitor` RPM. The stock
+extension hides itself when `org.gnome.SystemMonitor.desktop` is not found,
+which on the Bluefin base (where that file is hidden) or here (where the RPM
+is gone) means it never shows; the fork looks for Mission Center first. Upstream renders its `metadata.json`
+with meson, so the build does the equivalent substitution itself, declaring
+the shell the image ships — the extension's code is identical between
+upstream's `gnome-50` branch and `main`, so one pin serves both the shipping
+variants and the rawhide image.
 
 Mosaic WM is the tiling extension, replacing Tiling Shell. It is plain
 JavaScript, so it needs no build step. Upstream declares `shell-version`
@@ -97,8 +116,9 @@ Which extensions are on by default is the `ENABLED_EXTENSIONS` list in
 `zz2-bluespin-extensions.gschema.override` at build time. `screen-rotate` is
 added on `bluespin-surface` only; everything else is the same across variants.
 Bluefin's `blur-my-shell`, `dash-to-dock`, `gsconnect` and `logomenu` are
-deliberately left off, as are `nekotorch`, `mosaicwm`, `just-perfection`
-and the Fedora default (GNOME Classic) set — all shipped, none enabled.
+deliberately left off, as are `nekotorch`, `mosaicwm`, `just-perfection`,
+`system-monitor` and the Fedora default (GNOME Classic) set — all shipped,
+none enabled.
 
 GSettings overrides **replace** the key rather than merging, so that list
 restates Bluefin's defaults — new extensions Bluefin enables upstream will not

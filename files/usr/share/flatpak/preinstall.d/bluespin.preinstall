@@ -36,6 +36,10 @@ IsRuntime=false
 Branch=stable
 IsRuntime=false
 
+[Flatpak Preinstall io.missioncenter.MissionCenter]
+Branch=stable
+IsRuntime=false
+
 [Flatpak Preinstall org.gnome.baobab]
 Branch=stable
 IsRuntime=false
