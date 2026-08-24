@@ -96,6 +96,19 @@ jobs:
           echo "IMAGE_DESC=${{ matrix.image_desc }}" >> ${GITHUB_ENV}
           echo "FEDORA_BRANCH=${{ matrix.fedora_branch }}" >> ${GITHUB_ENV}
 
+      # The Secure Boot signing key for the surface kernel, as a podman build
+      # secret. Absent (e.g. a PR from a fork, where secrets do not exist) the
+      # build still works and warns; publishing only happens from main, where
+      # the secret is present.
+      - name: Stage the Secure Boot signing key
+        env:
+          SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
+        run: |
+          if [[ -n "${SECUREBOOT_KEY}" ]]; then
+            printf '%s' "${SECUREBOOT_KEY}" > "${RUNNER_TEMP}/secureboot.key"
+            echo "SECUREBOOT_KEY_FILE=${RUNNER_TEMP}/secureboot.key" >> "${GITHUB_ENV}"
+          fi
+
       # This actually builds the container image, tagged with the branch
       - name: Build Image
         id: build-image

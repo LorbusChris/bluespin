@@ -293,10 +293,10 @@ if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
     # still work via iptsd + libinput's generic tablet handling.
     # Restore the swap once linux-surface publishes builds against libwacom 2.19.
     #
-    # TODO(secure-boot): the COPR build signs the kernel with Red Hat's test
-    # keys, so this image does not boot with Secure Boot enabled. linux-surface
-    # signs with a MOK key the user enrolls; doing the same needs a key we
-    # hold and a signing step COPR cannot do for us.
+    # Secure Boot: the COPR signs the kernel image with Red Hat's test keys,
+    # which shim does not trust, so it is re-signed below with our own MOK
+    # key when the build has it. Users enroll the certificate once with
+    # `ujust enroll-bluespin-secureboot-key`.
 
     # Remove Existing Kernel
     # Tolerate packages the base image no longer ships (e.g. kmod-framework-laptop);
@@ -362,6 +362,36 @@ EOF
     export DRACUT_NO_XATTR=1
     /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
     chmod 0600 "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+
+    # Secure Boot. Only the kernel image needs a signature shim can verify:
+    # the modules were signed at build time with the kernel's own ephemeral
+    # key, which the kernel already trusts. The COPR signed vmlinuz with Red
+    # Hat's TEST keys, so re-sign it with our MOK key -- the enrolment
+    # candidate ships as /usr/lib/pki/bluespin-secureboot.der, and the ujust
+    # recipe wraps `mokutil --import` for it. The private key arrives as a
+    # podman build secret (never in the image or a layer); without it the
+    # build still succeeds and says plainly what it produced.
+    install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.der \
+        /usr/lib/pki/bluespin-secureboot.der
+    install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.pem \
+        /usr/lib/pki/bluespin-secureboot.pem
+    install -Dm0644 /ctx/files/usr/share/ublue-os/just/60-custom.just \
+        /usr/share/ublue-os/just/60-custom.just
+    if [[ -f /run/secrets/secureboot_key ]]; then
+        dnf -y install sbsigntools
+        vmlinuz="/usr/lib/modules/${QUALIFIED_KERNEL}/vmlinuz"
+        sbsign --key /run/secrets/secureboot_key \
+            --cert /usr/lib/pki/bluespin-secureboot.pem \
+            --output "${vmlinuz}.signed" "${vmlinuz}"
+        mv "${vmlinuz}.signed" "${vmlinuz}"
+        chmod 0755 "${vmlinuz}"
+        # Fail here rather than ship a kernel that silently cannot boot with
+        # Secure Boot on
+        sbverify --cert /usr/lib/pki/bluespin-secureboot.pem "${vmlinuz}"
+        dnf -y remove sbsigntools
+    else
+        echo "::warning::no secureboot_key build secret: the surface kernel keeps the COPR's test-key signature and will not boot with Secure Boot enabled"
+    fi
 
 fi
 

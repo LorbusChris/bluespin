@@ -98,6 +98,13 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base}")
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${target_image##*/}")
 
+    # Optional Secure Boot signing key for the surface kernel (CI stages it
+    # from the SECUREBOOT_KEY repo secret; see build.sh). Absent means an
+    # unsigned build that warns.
+    if [[ -n "${SECUREBOOT_KEY_FILE:-}" ]]; then
+        BUILD_ARGS+=("--secret" "id=secureboot_key,src=${SECUREBOOT_KEY_FILE}")
+    fi
+
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
         LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
