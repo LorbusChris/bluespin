@@ -31,6 +31,63 @@ install_flathub_and_preinstall() {
     systemctl enable bluespin-flatpak-preinstall.service
 }
 
+# The multimedia stack Fedora cannot ship: full ffmpeg (H.264/H.265/AAC and
+# friends), the freeworld VA-API/VDPAU mesa drivers -- Silverblue ships NO
+# VA-API driver at all -- and the HEVC plugin for libheif. From RPMFusion,
+# which unlike negativo17 (what the Bluefin base uses) publishes for every
+# branch including rawhide, so the same function serves the whole matrix.
+# Same enable/install/disable hygiene as the COPRs: the repos ship installed
+# but disabled, one `dnf config-manager setopt` away for anyone layering.
+install_multimedia_stack() {
+    local relver
+    relver="$(dnf --dump-variables 2>/dev/null | sed -n 's/^releasever = //p')"
+    [[ -n "${relver}" ]]
+
+    dnf -y install \
+        "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${relver}.noarch.rpm" \
+        "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${relver}.noarch.rpm"
+
+    # One transaction each: swap cannot take unrelated packages, so the
+    # full-ffmpeg swap (which drags the whole libav*-free set with
+    # --allowerasing) runs first, the additions after.
+    dnf -y swap --allowerasing ffmpeg-free ffmpeg
+    dnf -y swap --allowerasing fdk-aac-free fdk-aac
+
+    # No mesa-vdpau-drivers-freeworld: VDPAU is dead upstream and RPMFusion
+    # stopped building it above F45. VA-API is the API that matters.
+    dnf -y install \
+        libheif-freeworld \
+        intel-media-driver \
+        ffmpegthumbnailer
+
+    # The freeworld VA driver hard-requires the exact mesa version. On a
+    # branched release that is stable, so it must succeed; on rawhide
+    # RPMFusion routinely builds against a Koji mesa the compose has not
+    # shipped yet, and that skew is neither ours nor actionable -- warn and
+    # ship without hardware decode until the compose catches up.
+    if [[ "${relver}" == "rawhide" ]]; then
+        dnf -y install mesa-va-drivers-freeworld || \
+            echo "::warning::mesa-va-drivers-freeworld does not resolve against this rawhide compose (RPMFusion built for a newer mesa); no VA-API hardware decode in this build"
+    else
+        dnf -y install mesa-va-drivers-freeworld
+        rpm -q mesa-va-drivers-freeworld >/dev/null
+    fi
+
+    # Prove the swap took: a build where dnf quietly kept the -free stack
+    # would ship crippled codecs under the same name. (An `!` alone would not
+    # trip errexit -- SC2251 -- hence the explicit failure.)
+    rpm -q ffmpeg >/dev/null
+    if rpm -q ffmpeg-free >/dev/null 2>&1; then
+        echo "ffmpeg-free survived the swap to RPMFusion ffmpeg" >&2
+        return 1
+    fi
+
+    # Disable by file, not by repo id: the ids differ per branch (rpmfusion-free
+    # and -free-updates on a branched release, rpmfusion-free-rawhide on
+    # rawhide), and a named setopt quietly misses whichever set is absent.
+    sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/rpmfusion-*.repo
+}
+
 # End-of-build cleanup for a plain Silverblue base: /boot must be empty (the
 # ostree deployment materialises it) and /var pruned for `bootc container lint`
 # to pass, keeping only the caches the Containerfile mounts. find rather than

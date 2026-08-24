@@ -90,9 +90,6 @@ else
     # why the 45 and rawhide legs land here, and why they deliberately do
     # WITHOUT:
     #
-    #   * the negativo17 multimedia stack (full ffmpeg/mesa/VA-API, versionlocked
-    #     by ublue-os/main): no f45 tree exists, so expect degraded H.264/H.265/AAC
-    #     playback and hardware video decode
     #   * kmod-v4l2loopback: ublue's akmods have no F45 build, and their kmod RPM
     #     names embed the exact kernel EVR they were built against, so nothing
     #     exists for rawhide's kernel. (Provenance is not the problem -- ublue
@@ -118,6 +115,11 @@ else
     # them the bazaar/gradia integration extensions would have nothing to
     # integrate with.
     install_flathub_and_preinstall "${PREINSTALL_FILES[@]}"
+
+    # Full codecs and hardware video decode, from RPMFusion. The Bluefin base
+    # gets the equivalent from negativo17, which has no tree above F44 -- this
+    # is the piece that used to make a plain-Fedora bluespin second-rate.
+    install_multimedia_stack
 fi
 
 ############################################################################
