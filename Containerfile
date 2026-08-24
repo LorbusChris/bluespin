@@ -31,9 +31,14 @@ FROM base
 
 ARG IMAGE_NAME="${IMAGE_NAME:-bluespin}"
 
+# secureboot_key: optional. When `just build` passes it (CI does, from the
+# SECUREBOOT_KEY repo secret), the surface kernel image is signed with our
+# MOK key; without it the build still works and warns. required=false keeps
+# keyless local builds building.
 RUN --mount=type=cache,dst=/var/cache/libdnf5 \
     --mount=type=cache,dst=/var/cache/rpm-ostree \
     --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=secret,id=secureboot_key,required=false \
     /ctx/build_files/build.sh
 
 RUN bootc container lint

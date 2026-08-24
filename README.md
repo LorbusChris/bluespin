@@ -20,6 +20,32 @@ supplies what that base lacks. Which branches CI builds is the matrix in
 [build.yml](.github/workflows/build.yml); the rawhide legs exist to find out
 what breaks on the next GNOME before it ships.
 
+## Secure Boot on bluespin-surface
+
+The surface kernel comes from our own
+[`@mobility/surface`](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/)
+COPR and is re-signed at image-build time with bluespin's MOK key (the COPR
+itself can only sign with Red Hat's test keys, which shim rejects). To boot it
+with Secure Boot enabled, enroll the certificate once:
+
+```bash
+ujust enroll-bluespin-secureboot-key   # wraps: sudo mokutil --import /usr/lib/pki/bluespin-secureboot.der
+```
+
+mokutil asks for a one-time password; at the next boot, the MOK manager
+appears — choose "Enroll MOK" and enter it. Images built without the signing
+key (a fork's pull request, a local `just build` without
+`SECUREBOOT_KEY_FILE`) keep the test-key signature and say so in the build
+log; they boot with Secure Boot disabled.
+
+The other platforms need none of this to boot: their kernels carry Fedora's
+own Secure Boot signature, which shim already trusts. One optional enrolment
+exists there: on the Bluefin-based 44 images, the base's `v4l2loopback`
+module (OBS virtual camera) is signed with Universal Blue's key, so under
+Secure Boot it only loads after the base's own
+`ujust enroll-secure-boot-key` (password `universalblue`). Booting is
+unaffected either way.
+
 ## Switching to bluespin
 
 From an existing bootc/atomic Fedora system:
