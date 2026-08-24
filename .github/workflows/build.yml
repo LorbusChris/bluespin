@@ -65,15 +65,6 @@ jobs:
             image_desc: "Bluespin DX"
           - platform: bluespin-surface
             image_desc: "Bluespin for Microsoft Surface devices"
-        # Not a CI-cost choice but an impossibility: linux-surface publishes
-        # for f43 only, and its iptsd build needs libspdlog.so.1.15, which
-        # Fedora 45 and later no longer ship. 44 still installs the f43 build
-        # (see the pin in build.sh). Lift this when linux-surface catches up.
-        exclude:
-          - platform: bluespin-surface
-            fedora_branch: '45'
-          - platform: bluespin-surface
-            fedora_branch: rawhide
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate

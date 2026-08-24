@@ -272,17 +272,13 @@ fi
 
 # Surface Variant
 if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
-    # Install Surface Packages
-    dnf config-manager addrepo --from-repofile=https://pkg.surfacelinux.com/fedora/linux-surface.repo
-    dnf config-manager setopt linux-surface.enabled=0
-
-    # Workaround: linux-surface has no F44 repo yet, and its repofile hardcodes
-    # baseurl=.../fedora/f$releasever/, which 404s on F44. Pin to F43 until F44 is published.
-    # Fail loudly rather than silently skipping the repo (upstream sets skip_if_unavailable=1).
-    # https://github.com/linux-surface/linux-surface/issues/2102
-    dnf config-manager setopt linux-surface.baseurl=https://pkg.surfacelinux.com/fedora/f43/
-    dnf config-manager setopt linux-surface.skip_if_unavailable=0
-
+    # kernel-surface and iptsd from our own @mobility/surface COPR, built per
+    # Fedora branch from linux-surface's sources (LorbusChris/linux-surface,
+    # branch arkify-copr: their 7.1 series rebased onto Fedora's kernel-ark).
+    # linux-surface itself publishes for f43 only; its kernel would install
+    # on any branch, but its iptsd links libspdlog.so.1.15, which 45 and later
+    # no longer ship -- and one source for every branch beats two.
+    #
     # NOTE: libwacom-surface{,-data} is deliberately NOT swapped in. It is not merely
     # inconvenient on F44, it is uninstallable:
     #   - libwacom-surface (2.17) provides symbol versions up to LIBWACOM_2.15, but F44's
@@ -295,7 +291,12 @@ if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
     # Cost of omitting: GNOME loses pen-display metadata for Surface Pro 4+/Book/Laptop
     # Studio (stock libwacom only knows Surface Go/Go 2). Pen and touch input themselves
     # still work via iptsd + libinput's generic tablet handling.
-    # Restore the swap once linux-surface publishes F44 builds against libwacom 2.19.
+    # Restore the swap once linux-surface publishes builds against libwacom 2.19.
+    #
+    # TODO(secure-boot): the COPR build signs the kernel with Red Hat's test
+    # keys, so this image does not boot with Secure Boot enabled. linux-surface
+    # signs with a MOK key the user enrolls; doing the same needs a key we
+    # hold and a signing step COPR cannot do for us.
 
     # Remove Existing Kernel
     # Tolerate packages the base image no longer ships (e.g. kmod-framework-laptop);
@@ -344,14 +345,14 @@ surface_kbd
 
 EOF
 
-    # Install Kernel + touch daemon.
-    # Enable the repo alongside Fedora's rather than passing --repo=linux-surface:
-    # --repo restricts resolution to that repo alone, so iptsd's dependencies
-    # (cairomm, which Fedora ships) become unresolvable.
-    dnf config-manager setopt linux-surface.enabled=1
+    # Install Kernel + touch daemon. Enable/install/disable so the COPR is not
+    # left active in the shipped image; enabled alongside Fedora's repos rather
+    # than --repo, which would hide iptsd's Fedora dependencies (cairomm, ...)
+    # from the resolver.
+    dnf -y copr enable @mobility/surface
     dnf -y install --setopt=disable_excludes=* \
         kernel-surface iptsd
-    dnf config-manager setopt linux-surface.enabled=0
+    dnf -y copr disable @mobility/surface
 
     dnf versionlock add kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
 
