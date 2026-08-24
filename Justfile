@@ -97,6 +97,14 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
 
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base}")
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${target_image##*/}")
+    BUILD_ARGS+=("--build-arg" "FEDORA_BRANCH=${fedora_branch}")
+
+    # The out-of-tree module's own version, for modinfo and dmesg. Upstream's
+    # Makefile derives it with `git describe`, which cannot work inside the
+    # build: the submodule's .git is a gitlink into this repo's .git/modules,
+    # and neither is in the build context.
+    BUILD_ARGS+=("--build-arg" \
+        "V4L2LOOPBACK_VERSION=$(git -C kmods/v4l2loopback describe --tags --always --dirty 2>/dev/null || echo snapshot)")
 
     # Optional Secure Boot signing key for the surface kernel (CI stages it
     # from the SECUREBOOT_KEY repo secret; see build.sh). Absent means an
@@ -128,6 +136,14 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
 
     # This actually builds the image!
     PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile)
+
+    # NO_CACHE=1 forces a full rebuild. Podman's layer cache keys on neither
+    # bind-mounted context content nor secrets, so a cached layer can lie
+    # about both (see README); local verification builds want this. CI runs
+    # on fresh runners and never needs it.
+    if [[ -n "${NO_CACHE:-}" ]]; then
+        PODMAN_BUILD_ARGS+=("--no-cache")
+    fi
 
     # Cross-arch builds need qemu-user-static with binfmt registered on an x86
     # host and take hours; CI uses native arm64 runners, where this is a no-op

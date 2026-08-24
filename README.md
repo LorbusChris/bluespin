@@ -20,31 +20,40 @@ supplies what that base lacks. Which branches CI builds is the matrix in
 [build.yml](.github/workflows/build.yml); the rawhide legs exist to find out
 what breaks on the next GNOME before it ships.
 
-## Secure Boot on bluespin-surface
+## Secure Boot
 
-The surface kernel comes from our own
-[`@mobility/surface`](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/)
-COPR and is re-signed at image-build time with bluespin's MOK key (the COPR
-itself can only sign with Red Hat's test keys, which shim rejects). To boot it
-with Secure Boot enabled, enroll the certificate once:
+Two things in these images are signed with bluespin's own MOK key, and one
+enrolment covers both:
+
+- **`v4l2loopback`** (the virtual camera OBS and friends use), on every
+  platform and branch. It is built from
+  [upstream's sources](https://github.com/v4l2loopback/v4l2loopback) against
+  the exact kernel each image ships and signed at build time, replacing the
+  Bluefin base's copy — which is signed with Universal Blue's key and exists
+  only for Fedora 44.
+- **The `bluespin-surface` kernel**, whose `vmlinuz` is re-signed after coming
+  from our own
+  [`@mobility/surface`](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/)
+  COPR (COPR can only sign with Red Hat's test keys, which shim rejects).
+
+Enroll the certificate once:
 
 ```bash
 ujust enroll-bluespin-secureboot-key   # wraps: sudo mokutil --import /usr/lib/pki/bluespin-secureboot.der
 ```
 
 mokutil asks for a one-time password; at the next boot, the MOK manager
-appears — choose "Enroll MOK" and enter it. Images built without the signing
-key (a fork's pull request, a local `just build` without
-`SECUREBOOT_KEY_FILE`) keep the test-key signature and say so in the build
-log; they boot with Secure Boot disabled.
+appears — choose "Enroll MOK" and enter it.
 
-The other platforms need none of this to boot: their kernels carry Fedora's
-own Secure Boot signature, which shim already trusts. One optional enrolment
-exists there: on the Bluefin-based 44 images, the base's `v4l2loopback`
-module (OBS virtual camera) is signed with Universal Blue's key, so under
-Secure Boot it only loads after the base's own
-`ujust enroll-secure-boot-key` (password `universalblue`). Booting is
-unaffected either way.
+Without enrolling, `bluespin` and `bluespin-dx` still boot normally — their
+kernels carry Fedora's own signature, which shim already trusts — and only
+the virtual camera stays unavailable. `bluespin-surface` needs the enrolment
+to boot with Secure Boot on at all, since its kernel is ours.
+
+Images built without the signing key (a fork's pull request, a local
+`just build` without `SECUREBOOT_KEY_FILE`) ship the module unsigned and the
+surface kernel with its COPR test-key signature; both say so in the build
+log, and both work with Secure Boot disabled.
 
 ## Switching to bluespin
 
@@ -221,6 +230,13 @@ plain Silverblue gets them from [silverblue_base.sh](build_files/silverblue_base
 
 CI builds the matrix daily and on every push to `main`
 (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
+
+One local-only caveat: podman keys the build cache on the base image and the
+`RUN` command, but **not** on the contents of the `ctx` stage the build
+scripts are bind-mounted from, nor on build secrets. So a local rebuild can
+silently reuse a layer built from older scripts — pass `--no-cache` (or
+`podman rmi` the previous tag) when a local build is meant to *prove*
+something. CI runners start cold, so they are unaffected.
 
 ## ISOs
 

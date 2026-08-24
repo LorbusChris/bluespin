@@ -27,6 +27,8 @@ source /ctx/build_files/signing.sh
 source /ctx/build_files/extensions.sh
 # shellcheck source=build_files/silverblue_base.sh
 source /ctx/build_files/silverblue_base.sh
+# shellcheck source=build_files/kmods.sh
+source /ctx/build_files/kmods.sh
 
 # Universal Blue images carry their identity here (image-name, base, flavor);
 # Fedora's own images have nothing of the kind. This is the property the
@@ -90,16 +92,12 @@ else
     # why the 45 and rawhide legs land here, and why they deliberately do
     # WITHOUT:
     #
-    #   * kmod-v4l2loopback: ublue's akmods have no F45 build, and their kmod RPM
-    #     names embed the exact kernel EVR they were built against, so nothing
-    #     exists for rawhide's kernel. (Provenance is not the problem -- ublue
-    #     rebuilds Fedora's own kernel RPMs under the same NVR, adding only a
-    #     Secure Boot signature, so their kmods do match a stock Fedora kernel of
-    #     the same version; they just need their MOK enrolled to load under Secure
-    #     Boot.) RPMFusion's akmod builds per-kernel but is unsigned.
     #   * the DX layer (docker-ce has no f45 build either), Bluefin's nine bundled
     #     extensions (our forks stand in, see section 5), branding and the
     #     Homebrew stack
+    #
+    # Codecs and v4l2loopback used to be on that list too; both are now built
+    # here for every branch (section 7 and install_multimedia_stack below).
     #
     # What they do get is everything below: our packages, our extensions, and
     # the shell-version assertion that turns "silently disabled on the new
@@ -231,6 +229,17 @@ dnf -y copr disable lorbus/network-displays
 #    also know how to verify its own updates.
 ############################################################################
 install_signing_policy
+
+# The bluespin MOK certificate and its ujust enrolment recipe ship on every
+# platform: enrolling it is what lets the v4l2loopback module (section 7)
+# load under Secure Boot anywhere, and on surface additionally the kernel
+# itself. Both bases' ujust entry points already `import?` 60-custom.just.
+install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.der \
+    /usr/lib/pki/bluespin-secureboot.der
+install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.pem \
+    /usr/lib/pki/bluespin-secureboot.pem
+install -Dm0644 /ctx/files/usr/share/ublue-os/just/60-custom.just \
+    /usr/share/ublue-os/just/60-custom.just
 
 ############################################################################
 # 5. GNOME Shell extensions
@@ -373,12 +382,6 @@ EOF
     # recipe wraps `mokutil --import` for it. The private key arrives as a
     # podman build secret (never in the image or a layer); without it the
     # build still succeeds and says plainly what it produced.
-    install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.der \
-        /usr/lib/pki/bluespin-secureboot.der
-    install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.pem \
-        /usr/lib/pki/bluespin-secureboot.pem
-    install -Dm0644 /ctx/files/usr/share/ublue-os/just/60-custom.just \
-        /usr/share/ublue-os/just/60-custom.just
     if [[ -f /run/secrets/secureboot_key ]]; then
         dnf -y install sbsigntools
         vmlinuz="/usr/lib/modules/${QUALIFIED_KERNEL}/vmlinuz"
@@ -398,7 +401,19 @@ EOF
 fi
 
 ############################################################################
-# 7. Report what this image was built against, so the build log answers the
+# 7. Kernel modules, built against whatever kernel sections 1-6 decided on --
+#    which is why this comes after the variant layers -- and signed with our
+#    MOK key. See build_files/kmods.sh.
+############################################################################
+
+# The Bluefin base's copy is signed with ublue's key and stops at F44;
+# ours replaces it everywhere. (The FP5 platform, when it lands, skips this:
+# a phone kernel needs no virtual camera.)
+remove_if_installed kmod-v4l2loopback
+install_v4l2loopback
+
+############################################################################
+# 8. Report what this image was built against, so the build log answers the
 #    question the rawhide leg exists to ask -- and every other leg's log
 #    answers it for free.
 ############################################################################
@@ -410,7 +425,7 @@ for ext in "${EXT_DIR}"/*/; do
 done
 
 ############################################################################
-# 8. Cleanup. Last, always.
+# 9. Cleanup. Last, always.
 ############################################################################
 if base_is_ublue; then
     dnf clean all

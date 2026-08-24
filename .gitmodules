@@ -1,0 +1,4 @@
+[submodule "kmods/v4l2loopback"]
+	path = kmods/v4l2loopback
+	url = https://github.com/v4l2loopback/v4l2loopback.git
+	branch = main
