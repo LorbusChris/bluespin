@@ -110,7 +110,7 @@ jobs:
       - name: Upload release artifact
         # A release event names its own release; a dispatch can name one
         if: ${{ inputs.release_id || github.event_name == 'release' }}
-        uses: svenstaro/upload-release-action@81c65b7cd4de9b2570615ce3aad67a41de5b1a13 # v2.11.2
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # 2.11.5
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           release_id: ${{ inputs.release_id || github.event.release.id }}
