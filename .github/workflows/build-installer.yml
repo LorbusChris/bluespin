@@ -294,10 +294,10 @@ jobs:
           ISO_PATH: ${{ steps.build.outputs.iso-dest }}
         run: |
           set -euo pipefail
-          # --clobber: a re-run of a failed or partial release run must be
-          # able to replace what an earlier attempt attached
-          gh release upload "${RELEASE_TAG}" \
-            "${ISO_PATH}" "${ISO_PATH}-CHECKSUM" --clobber
+          # A live ISO is 3-5 GiB and a release asset must be under 2, so
+          # the script attaches it in parts and says so on the release
+          .github/scripts/upload-release-asset.sh "${RELEASE_TAG}" "${ISO_PATH}"
+          .github/scripts/upload-release-asset.sh "${RELEASE_TAG}" "${ISO_PATH}-CHECKSUM"
 
   # The pull-request path: read the completed build run's plan, map its
   # -installer flags to legs, and build each ISO from that leg's shared

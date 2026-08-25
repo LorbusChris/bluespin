@@ -174,9 +174,9 @@ jobs:
           ARCHIVE: ${{ env.IMAGE_NAME }}-${{ needs.plan-release.outputs.tag }}.7z
         run: |
           set -euo pipefail
-          # --clobber: a re-run of a failed or partial release run must be
-          # able to replace what an earlier attempt attached
-          gh release upload "${RELEASE_TAG}" "${ARCHIVE}" --clobber
+          # 1.8 GiB today, against a 2 GiB asset limit -- the script
+          # attaches it in parts on the day it stops fitting
+          .github/scripts/upload-release-asset.sh "${RELEASE_TAG}" "${ARCHIVE}"
 
   # The pull-request path: read the completed build run's plan and build
   # the flashable image from the fp5 leg's shared artifact. Loaded with
