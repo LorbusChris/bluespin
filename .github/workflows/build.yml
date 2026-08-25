@@ -224,3 +224,18 @@ jobs:
           # https://github.com/coreos/rpm-ostree/issues/5509
           # use old bundle format, so we can use newer cosign 3.X.X instead of 2.X.X
           cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+
+      # Keyless too, additively: the same digest gets a second signature,
+      # bound to this workflow's OIDC identity via a Fulcio certificate and
+      # logged in Rekor (id-token: write above is what enables this).
+      # Nothing verifies it on-device yet -- policy.json keeps enforcing the
+      # key -- but signing both ways from today means a later switch to
+      # keyless verification is a policy change, not a re-signing campaign
+      # over every published image. Same legacy bundle format as the keyed
+      # signature, so c/image can read these once that switch happens.
+      - name: Sign container image (keyless)
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          cosign sign -y --new-bundle-format=false --use-signing-config=false ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}

@@ -101,6 +101,19 @@ signature-verified on-device. To verify manually:
 cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 ```
 
+Every published digest additionally carries a **keyless** signature bound to
+the build workflow's OIDC identity (Fulcio certificate, logged in Rekor).
+On-device verification keeps enforcing the key; the keyless signature exists
+so a later switch is a policy change rather than a re-signing campaign. To
+verify it:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/build\.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/lorbuschris/bluespin:latest
+```
+
 ## Flatpak curation
 
 Flatpaks come in two tiers. The system set — one

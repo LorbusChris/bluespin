@@ -9,7 +9,31 @@
   'git-submodules': {
     enabled: true,
   },
+  customDatasources: {
+    // The state of an upstream GitHub issue or PR, as a version: 0 while
+    // open, 1 once closed -- so a close upstream becomes an update PR here.
+    // Consumed by the watch lines in .github/upstream-watch.env.
+    'github-state': {
+      defaultRegistryUrlTemplate: 'https://api.github.com/repos/{{packageName}}',
+      format: 'json',
+      transformTemplates: [
+        '{"releases": [{"version": state = "open" ? "0" : "1"}]}',
+      ],
+    },
+  },
   customManagers: [
+    {
+      // Upstream progress watches -- see .github/upstream-watch.env.
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^\\.github/upstream-watch\\.env$/',
+      ],
+      matchStrings: [
+        '# renovate: datasource=custom\\.github-state depName=(?<depName>\\S+)\\n[A-Z0-9_]+_CLOSED=(?<currentValue>\\d)',
+      ],
+      datasourceTemplate: 'custom.github-state',
+      versioningTemplate: 'loose',
+    },
     {
       // The Starship release the image installs. Renovate bumps the version;
       // the build then fails on the pinned hashes until a human updates them,
@@ -94,6 +118,7 @@
       description: 'Never automerge extension pin or upstream-watcher bumps',
       matchFileNames: [
         'build_files/extensions.sh',
+        '.github/upstream-watch.env',
       ],
       automerge: false,
     },
