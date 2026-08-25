@@ -2,3 +2,7 @@ cosign.key
 _build_*
 output
 _build-*/**
+
+# Disk image build output
+/out/
+*.7z

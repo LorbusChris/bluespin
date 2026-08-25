@@ -1,0 +1,14 @@
+# Injected into the disk image by image-builder.
+#
+# A phone has no rescue shell, no serial console and no keyboard until something
+# already works. If gnome-initial-setup fails to start on the panel -- a real
+# possibility on a first port -- this account is the only way in, and the whole
+# device layer is built around sshd, usb-network and a getty on ttyGS0 being
+# that way in. Shipping an image where those doors have no key would defeat
+# the point of enabling them.
+#
+# CHANGE THIS PASSWORD ON FIRST LOGIN. It is published in a public repository.
+[[customizations.user]]
+name = "bluespin"
+password = "bluespin"
+groups = ["wheel"]

@@ -10,6 +10,22 @@ export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_fedora_branch := env_var("DEFAULT_FEDORA_BRANCH")
 export chunkah_image := env_var("CHUNKAH_IMAGE")
 
+# Flashable disk images (bluespin-fp5 only). env() rather than env_var() so a
+# local run works without editing bluespin.env. The default image ref derives
+# from REPO_ORGANIZATION rather than hardcoding an owner: on a fork, a
+# hardcoded ref would silently pull and flash upstream's published image
+# instead of the operator's own build.
+export disk_device := env("DISK_DEVICE", "fairphone-fp5")
+export disk_image_ref := env("DISK_IMAGE_REF", "ghcr.io/" + lowercase(repo_organization) + "/bluespin-fp5:45")
+export image_builder_image := env_var("IMAGE_BUILDER_IMAGE")
+# NOT pocketblue's release setting of `-mmt=1 -md=1500m`: a 1500 MB LZMA2
+# dictionary needs an order of magnitude more RAM to compress, single-threaded,
+# and would thrash a hosted runner. The unused partition space is zeros and
+# compresses to nothing either way, so the archive tracks content size.
+export disk_compression_7z := env("DISK_COMPRESSION_7Z", "-mmt=on")
+
+import "tools/disk_images.just"
+
 [private]
 default:
     @just --list
