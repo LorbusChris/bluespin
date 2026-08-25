@@ -42,18 +42,22 @@ jobs:
         id: map
         run: |
           set -euo pipefail
+          # Only what names the leg: the tag suffix follows from the
+          # platform, and a matrix field would land in the job's name
           legs="$(jq -c '
-            [ (.bluespin[] | {platform: "bluespin", fedora_branch, arch, tag_suffix: ("-" + .arch)}),
-              (.dx[] | {platform: "bluespin-dx", fedora_branch, arch, tag_suffix: ""}),
-              (.surface[] | {platform: "bluespin-surface", fedora_branch, arch, tag_suffix: ""}),
-              (.fp5[] | {platform: "bluespin-fp5", fedora_branch, arch, tag_suffix: ""}) ]' plan.json)"
+            [ (.bluespin[] | {platform: "bluespin", fedora_branch, arch}),
+              (.dx[] | {platform: "bluespin-dx", fedora_branch, arch}),
+              (.surface[] | {platform: "bluespin-surface", fedora_branch, arch}),
+              (.fp5[] | {platform: "bluespin-fp5", fedora_branch, arch}) ]' plan.json)"
           {
             echo "legs=${legs}"
             echo "event=$(jq -r .event plan.json)"
           } | tee -a "$GITHUB_OUTPUT"
 
+  # No name: -- a matrix name template renders raw in the checks list
+  # whenever the job is skipped, so the leg carries the display:
+  # report (bluespin, 45, arm64)
   report:
-    name: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, gnome)
     needs: plan
     if: ${{ needs.plan.outputs.legs != '[]' }}
     # The report runs the image, so the runner must match its arch
@@ -78,7 +82,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           fedora_branch: ${{ matrix.fedora_branch }}
-          tag_suffix: ${{ matrix.tag_suffix }}
+          tag_suffix: ${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}
           source: ${{ needs.plan.outputs.event == 'pull_request' && 'artifact' || 'registry' }}
           run-id: ${{ github.event.workflow_run.id }}
           registry: ${{ env.IMAGE_REGISTRY }}
@@ -89,7 +93,7 @@ jobs:
           set -euo pipefail
           ref="${{ steps.acquire.outputs.ref }}"
           podman image exists "${ref}" || podman pull -q "${ref}"
-          echo "### ${{ matrix.platform }}:${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### ${{ matrix.platform }}:${{ matrix.fedora_branch }}${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}" >> "$GITHUB_STEP_SUMMARY"
           podman run --rm \
             -v "${PWD}/.github/scripts/report-extensions.sh:/tmp/report.sh:ro,Z" \
             --entrypoint bash "${ref}" /tmp/report.sh \

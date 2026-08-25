@@ -8,7 +8,8 @@ name: Acquire a built image
 description: >-
   Fetch a built image either from a build run's shared-image artifact
   (pull requests) or from the registry (pushes), and output a reference
-  consumers can use with rootless podman.
+  the consumer can use. Rootless by default; storage=root for the tools
+  that run under sudo and resolve refs from root's container storage.
 
 inputs:
   platform:
@@ -36,6 +37,12 @@ inputs:
     description: Token for the cross-run artifact download
     required: false
     default: ''
+  storage:
+    description: >-
+      Which container storage the image must land in -- rootless (the
+      default) or root, for consumers that run podman under sudo
+    required: false
+    default: rootless
 
 outputs:
   ref:
@@ -63,10 +70,17 @@ runs:
         PLATFORM: ${{ inputs.platform }}
         BRANCH: ${{ inputs.fedora_branch }}
         SUFFIX: ${{ inputs.tag_suffix }}
+        STORAGE: ${{ inputs.storage }}
       run: |
         set -euo pipefail
+        # Storage is per user: an image loaded rootless is invisible to
+        # `sudo podman`, and image-builder and Titanoboa both resolve
+        # their refs from root's storage.
+        sudo=()
+        [[ "${STORAGE}" == "root" ]] && sudo=(sudo)
+
         if [[ "${SOURCE}" == "artifact" ]]; then
-          ref="$(podman load -q -i /tmp/acquired-image/shared-image.oci | sed -n 's/^Loaded image[^:]*: //p' | head -1)"
+          ref="$("${sudo[@]}" podman load -q -i /tmp/acquired-image/shared-image.oci | sed -n 's/^Loaded image[^:]*: //p' | head -1)"
           rm -rf /tmp/acquired-image
           [[ -n "${ref}" ]] || { echo "::error::podman load reported no image"; exit 1; }
         else
@@ -76,5 +90,8 @@ runs:
           digest="$(skopeo inspect --no-tags --format '{{.Digest}}' \
             "docker://${reg}/${PLATFORM}:${tag}")"
           ref="${reg}/${PLATFORM}:${tag}@${digest}"
+          # Registry refs are pulled on use -- except by the sudo tools,
+          # which mount the image rather than pull it
+          [[ "${STORAGE}" == "root" ]] && sudo podman pull -q "${ref}" > /dev/null
         fi
         echo "ref=${ref}" >> "$GITHUB_OUTPUT"

@@ -100,7 +100,7 @@ jobs:
           echo "build=${build}" >> "$GITHUB_OUTPUT"
 
   disk:
-    name: Build FP5 disk image
+    name: bluespin-fp5 (disk)
     needs: plan-release
     if: ${{ github.event_name != 'workflow_run' && needs.plan-release.outputs.build == 'true' }}
     # 24.04, NOT 26.04. pocketblue moved every job to 26.04-arm and then moved
@@ -205,8 +205,11 @@ jobs:
             echo "pr=$(jq -r .pr plan.json)"
           } | tee -a "$GITHUB_OUTPUT"
 
+  # No name: -- a matrix name template renders raw in the checks list
+  # whenever the job is skipped, so the leg carries the display:
+  # pr-disk (45). The commit status below is what the pull request sees,
+  # and it keeps the family's full name.
   pr-disk:
-    name: bluespin-fp5 (${{ matrix.fedora_branch }}, disk)
     needs: plan-pr
     if: ${{ needs.plan-pr.outputs.legs != '[]' }}
     # 24.04, NOT 26.04 -- see the note on the disk job above

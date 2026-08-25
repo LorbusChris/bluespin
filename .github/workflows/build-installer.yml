@@ -101,40 +101,43 @@ jobs:
 
           legs='[]'
           addleg() { legs="$(jq -c ". + [$1]" <<< "${legs}")"; }
-          # One bluespin ISO per architecture the branch index serves,
-          # each on a native runner. The arm ISO is first of its kind
-          # here: if Titanoboa cannot produce one yet, that leg fails
-          # visibly on a release rather than silently not existing.
+          # One bluespin installer per architecture the branch index
+          # serves, each on a native runner (derived from the arch, so
+          # the leg objects stay the job's display name). The arm
+          # installer is first of its kind here: if Titanoboa cannot
+          # produce one yet, that leg fails visibly on a release rather
+          # than silently not existing.
           for arch in $(skopeo inspect --raw "docker://${reg}/bluespin:${tag}" \
               | jq -r '[.manifests[]?.platform.architecture // empty] | unique | .[]'); do
             case "${arch}" in
-              amd64) runner=ubuntu-24.04 ;;
-              arm64) runner=ubuntu-24.04-arm ;;
+              amd64|arm64) ;;
               *) continue ;;
             esac
-            addleg "{\"image_name\":\"bluespin\",\"arch\":\"${arch}\",\"runner\":\"${runner}\"}"
+            addleg "{\"image_name\":\"bluespin\",\"fedora_branch\":\"${tag}\",\"arch\":\"${arch}\"}"
           done
           for name in bluespin-dx bluespin-surface; do
             if skopeo inspect --no-tags --format '{{.Digest}}' \
                 "docker://${reg}/${name}:${tag}" > /dev/null 2>&1; then
-              addleg "{\"image_name\":\"${name}\",\"arch\":\"amd64\",\"runner\":\"ubuntu-24.04\"}"
+              addleg "{\"image_name\":\"${name}\",\"fedora_branch\":\"${tag}\",\"arch\":\"amd64\"}"
             else
-              echo "::warning::${name}:${tag} is not published; no ISO for it"
+              echo "::warning::${name}:${tag} is not published; no installer for it"
             fi
           done
           [[ "${legs}" != "[]" ]] || {
-            echo "::error::no published images serve tag ${tag}; nothing to build ISOs from"
+            echo "::error::no published images serve tag ${tag}; nothing to build installers from"
             exit 1
           }
 
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "legs=${legs}" >> "$GITHUB_OUTPUT"
 
-  build_iso:
-    name: ${{ matrix.image_name }} (${{ matrix.arch }}, iso)
+  # No name: -- a matrix name template renders raw in the checks list
+  # whenever the job is skipped (every workflow_run event skips this
+  # one), so the legs carry the display: installer (bluespin, 44, amd64)
+  installer:
     needs: plan-release
     if: ${{ github.event_name != 'workflow_run' }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
 
     permissions:
       # write, not read: the release upload attaches an asset -- with
@@ -152,6 +155,15 @@ jobs:
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
         with:
           extra-squeeze: true
+
+      # Titanoboa mounts the image as a container volume out of ROOT's
+      # storage (sudo podman run --mount type=image) and pulls nothing
+      # itself -- podman does not pull for an image volume, so the image
+      # has to be there first or the mount fails with "image not known"
+      - name: Pull the image into root's storage
+        env:
+          IMAGE_REF: ghcr.io/lorbuschris/${{ matrix.image_name }}:${{ needs.plan-release.outputs.tag }}
+        run: sudo podman pull "${IMAGE_REF}"
 
       # Builds a live ISO directly from the published bootc image; the
       # container-native ISO contract layer comes from the bluefin base
@@ -219,25 +231,28 @@ jobs:
           set -euo pipefail
           legs='[]'
           addleg() { legs="$(jq -c ". + [$1]" <<< "${legs}")"; }
+          # Only what names the leg: the tag suffix follows from the
+          # platform, and a matrix field would land in the job's name
           for key in $(jq -r '.bluespin_installer[]' plan.json); do
             branch="${key%-*}"; arch="${key##*-}"
-            addleg "{\"platform\":\"bluespin\",\"fedora_branch\":\"${branch}\",\"arch\":\"${arch}\",\"tag_suffix\":\"-${arch}\"}"
+            addleg "{\"platform\":\"bluespin\",\"fedora_branch\":\"${branch}\",\"arch\":\"${arch}\"}"
           done
           for key in $(jq -r '.dx_installer[]' plan.json); do
             branch="${key%-*}"
-            addleg "{\"platform\":\"bluespin-dx\",\"fedora_branch\":\"${branch}\",\"arch\":\"amd64\",\"tag_suffix\":\"\"}"
+            addleg "{\"platform\":\"bluespin-dx\",\"fedora_branch\":\"${branch}\",\"arch\":\"amd64\"}"
           done
           for key in $(jq -r '.surface_installer[]' plan.json); do
             branch="${key%-*}"
-            addleg "{\"platform\":\"bluespin-surface\",\"fedora_branch\":\"${branch}\",\"arch\":\"amd64\",\"tag_suffix\":\"\"}"
+            addleg "{\"platform\":\"bluespin-surface\",\"fedora_branch\":\"${branch}\",\"arch\":\"amd64\"}"
           done
           {
             echo "legs=${legs}"
             echo "pr=$(jq -r .pr plan.json)"
           } | tee -a "$GITHUB_OUTPUT"
 
-  pr-iso:
-    name: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+  # No name: -- see the installer job above; skipped matrix jobs would
+  # show the template itself
+  pr-installer:
     needs: plan-pr
     if: ${{ needs.plan-pr.outputs.legs != '[]' }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
@@ -256,7 +271,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha }}
-          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, installer)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh api "repos/${{ github.repository }}/statuses/${SHA}" \
@@ -279,10 +294,13 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           fedora_branch: ${{ matrix.fedora_branch }}
-          tag_suffix: ${{ matrix.tag_suffix }}
+          # Only the bluespin legs publish per-arch instance tags
+          tag_suffix: ${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}
           source: artifact
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+          # Titanoboa reads it from root's storage, under sudo
+          storage: root
 
       - name: Build ISO with Titanoboa
         id: build
@@ -312,7 +330,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha }}
-          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, installer)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh api "repos/${{ github.repository }}/statuses/${SHA}" \
@@ -324,7 +342,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha }}
-          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, installer)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh api "repos/${{ github.repository }}/statuses/${SHA}" \
