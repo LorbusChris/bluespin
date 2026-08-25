@@ -8,11 +8,18 @@
 #
 # Install media are release moments: the daily builds publish only the
 # OCI images existing installs update from, and the ISOs build when a
-# GitHub release is published (landing on that release) or by hand. Name
-# the release after the Fedora branch it ships -- "45.0", "f45" --
-# and the branch is read from the release tag; a dispatch names the
-# image tag directly.
-name: Build Bluespin ISOs
+# GitHub release is published (landing on that release) or by hand.
+# Releases are per Fedora branch: name the release after the branch it
+# ships -- "45.0", "f45" -- and the branch is read from the release
+# tag; a dispatch names the image tag directly. Which ISOs a release
+# gets is the registry's call, not a table's: one bluespin ISO per
+# architecture the branch index actually serves (44 gets no arm ISO
+# because 44 has no arm image), plus dx and surface where their tags
+# exist. Publish as a PRE-release, let these runs attach their assets,
+# then promote -- promotion fires no `published` event, so nothing
+# rebuilds. Re-runs overwrite their assets, so a failed leg is a
+# re-run, not a new release.
+name: Build Installer
 on:
   release:
     types:
@@ -22,7 +29,7 @@ on:
   # to build the ISO from it -- no media pipeline lives in a build leg
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
   workflow_dispatch:
@@ -32,14 +39,100 @@ on:
         type: string
         required: false
         default: 'latest'
+      release_id:
+        description: 'optional release to upload the ISOs to'
+        type: string
+        required: false
+  # release.yml calls this to build a pre-release's ISOs onto it before
+  # promoting -- it cannot go through the release event, which a
+  # GITHUB_TOKEN-created release never fires
+  workflow_call:
+    inputs:
+      tag:
+        description: 'image tag to build the ISOs from'
+        type: string
+        required: true
+      release_id:
+        description: 'release to upload the ISOs to'
+        type: string
+        required: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  # The file's own name as a literal, not github.workflow: under
+  # workflow_call that context names the CALLER, and the release
+  # workflow's two media calls must not land in one group and cancel
+  # each other
+  group: build-installer-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
+  # Release and dispatch legs come from the registry, not a table: the
+  # resolved tag's index says which architectures exist, and each one
+  # becomes a bluespin ISO leg -- a rawhide release works the moment
+  # on-demand builds have published rawhide's index, and fails visibly
+  # before. dx and surface get a leg where their tag resolves.
+  plan-release:
+    name: plan (release)
+    if: ${{ github.event_name != 'workflow_run' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      legs: ${{ steps.map.outputs.legs }}
+      tag: ${{ steps.map.outputs.tag }}
+    env:
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+    steps:
+      # Dispatch names the tag; a release names the branch in its tag
+      # ("45.0" -> 45), falling back to latest if it names none
+      - name: Resolve the tag and map the legs
+        id: map
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
+          reg="${IMAGE_REGISTRY,,}"
+          if [[ -n "${INPUT_TAG}" ]]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="$(grep -oE '4[0-9]|rawhide' <<< "${RELEASE_TAG}" | head -1 || true)"
+            tag="${tag:-latest}"
+          fi
+
+          legs='[]'
+          addleg() { legs="$(jq -c ". + [$1]" <<< "${legs}")"; }
+          # One bluespin ISO per architecture the branch index serves,
+          # each on a native runner. The arm ISO is first of its kind
+          # here: if Titanoboa cannot produce one yet, that leg fails
+          # visibly on a release rather than silently not existing.
+          for arch in $(skopeo inspect --raw "docker://${reg}/bluespin:${tag}" \
+              | jq -r '[.manifests[]?.platform.architecture // empty] | unique | .[]'); do
+            case "${arch}" in
+              amd64) runner=ubuntu-24.04 ;;
+              arm64) runner=ubuntu-24.04-arm ;;
+              *) continue ;;
+            esac
+            addleg "{\"image_name\":\"bluespin\",\"arch\":\"${arch}\",\"runner\":\"${runner}\"}"
+          done
+          for name in bluespin-dx bluespin-surface; do
+            if skopeo inspect --no-tags --format '{{.Digest}}' \
+                "docker://${reg}/${name}:${tag}" > /dev/null 2>&1; then
+              addleg "{\"image_name\":\"${name}\",\"arch\":\"amd64\",\"runner\":\"ubuntu-24.04\"}"
+            else
+              echo "::warning::${name}:${tag} is not published; no ISO for it"
+            fi
+          done
+          [[ "${legs}" != "[]" ]] || {
+            echo "::error::no published images serve tag ${tag}; nothing to build ISOs from"
+            exit 1
+          }
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "legs=${legs}" >> "$GITHUB_OUTPUT"
+
   build_iso:
     name: ${{ matrix.image_name }} (${{ matrix.arch }}, iso)
+    needs: plan-release
     if: ${{ github.event_name != 'workflow_run' }}
     runs-on: ${{ matrix.runner }}
 
@@ -51,23 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - image_name: bluespin
-            arch: amd64
-            runner: ubuntu-24.04
-          # The generic aarch64 image's installer, on a native arm
-          # runner. First of its kind here: if Titanoboa cannot produce
-          # an arm ISO yet, this leg fails visibly on a release rather
-          # than silently not existing.
-          - image_name: bluespin
-            arch: arm64
-            runner: ubuntu-24.04-arm
-          - image_name: bluespin-dx
-            arch: amd64
-            runner: ubuntu-24.04
-          - image_name: bluespin-surface
-            arch: amd64
-            runner: ubuntu-24.04
+        include: ${{ fromJSON(needs.plan-release.outputs.legs) }}
 
     steps:
       - name: Maximize build space
@@ -76,31 +153,14 @@ jobs:
         with:
           extra-squeeze: true
 
-      # Dispatch names the tag; a release names the branch in its tag
-      # ("45.0" -> 45), falling back to latest if it names none
-      - name: Resolve the image tag
-        id: tag
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          set -euo pipefail
-          if [[ -n "${INPUT_TAG}" ]]; then
-            tag="${INPUT_TAG}"
-          else
-            tag="$(grep -oE '4[0-9]|rawhide' <<< "${RELEASE_TAG}" | head -1 || true)"
-            tag="${tag:-latest}"
-          fi
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
       # Builds a live ISO directly from the published bootc image; the
       # container-native ISO contract layer comes from the bluefin base
       - name: Build ISO with Titanoboa
         id: build
         uses: ublue-os/titanoboa@5c457c3d0518bd17e754be0fd98a60d29d26abb4
         with:
-          image-ref: ghcr.io/lorbuschris/${{ matrix.image_name }}:${{ steps.tag.outputs.tag }}
-          iso-dest: ${{ github.workspace }}/${{ matrix.image_name }}-live-${{ matrix.arch }}.iso
+          image-ref: ghcr.io/lorbuschris/${{ matrix.image_name }}:${{ needs.plan-release.outputs.tag }}
+          iso-dest: ${{ github.workspace }}/${{ matrix.image_name }}-${{ needs.plan-release.outputs.tag }}-live-${{ matrix.arch }}.iso
 
       - name: Checksum ISO
         shell: bash
@@ -112,7 +172,7 @@ jobs:
       - name: Upload ISO
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ${{ matrix.image_name }}-live-${{ matrix.arch }}
+          name: ${{ matrix.image_name }}-${{ needs.plan-release.outputs.tag }}-live-${{ matrix.arch }}
           path: |
             ${{ steps.build.outputs.iso-dest }}
             ${{ steps.build.outputs.iso-dest }}-CHECKSUM
@@ -120,13 +180,18 @@ jobs:
           retention-days: 7
 
       - name: Upload release artifacts
-        if: ${{ github.event_name == 'release' }}
+        # A release event names its own release; a call or dispatch can
+        # name one
+        if: ${{ inputs.release_id || github.event_name == 'release' }}
         uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # 2.11.5
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          release_id: ${{ github.event.release.id }}
+          release_id: ${{ inputs.release_id || github.event.release.id }}
           file: ${{ steps.build.outputs.iso-dest }}*
           file_glob: true
+          # A re-run of a failed or partial release run must be able to
+          # replace what an earlier attempt attached
+          overwrite: true
 
   # The pull-request path: read the completed build run's plan, map its
   # -installer flags to legs, and build each ISO from that leg's shared

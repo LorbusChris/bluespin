@@ -17,8 +17,10 @@ ones live in [docs/desktop-defaults.md](docs/desktop-defaults.md).
 | `ghcr.io/lorbuschris/bluespin-fp5` | The phone (aarch64): the [pocketblue](https://github.com/pocketblue/pocketblue) device layer for the Fairphone 5, the [@mobility/gnome-mobile](https://copr.fedorainfracloud.org/coprs/g/mobility/gnome-mobile/) shell and the [@mobility/sc7280](https://copr.fedorainfracloud.org/coprs/g/mobility/sc7280/) kernel, plus telephony ([fp5.sh](build_files/fp5.sh)) -- the device layer on the generic aarch64 bluespin image |
 
 Each platform is built per Fedora branch, and the branch is the tag:
-`bluespin:44`, `bluespin-dx:rawhide`. `latest` is an alias for the default
-branch (44). Every branch builds on Fedora's own Silverblue. Pushes and
+`bluespin:44`, `bluespin-dx:rawhide`. Three channel aliases follow
+Fedora's lifecycle: `latest` points at the stable branch (44), `next`
+at the branched pre-release (45), and `rolling` at rawhide. Every
+branch builds on Fedora's own Silverblue. Pushes and
 the nightly build exactly what ships -- x86 and the variants on 44 and
 45, arm and fp5 on 45 -- while rawhide legs are opt-in (a ci label or a
 dispatch): they exist to find out what breaks on the next GNOME before
@@ -112,6 +114,48 @@ image, and attaches them there. The daily builds publish only the OCI
 images below -- existing installs update from those; nobody reinstalls
 to update.
 
+### Cutting a release
+
+Releases are cut per channel with the
+[`Release`](.github/workflows/release.yml) workflow: dispatch it from
+the Actions tab, pick `latest`, `next` or `rolling`, done. It cuts a
+**draft** release tagged `<branch>.<date>.<serial>` (`45.20260825.1`),
+builds the channel's entire media set onto it, and publishes only when
+every media job is green -- nothing is visible before that, and a
+failed run leaves only an invisible draft (which holds no tag): re-run
+the failed jobs (uploads overwrite) and publication follows, or delete
+the draft and dispatch anew.
+
+What publishing means is the channel's grade: `latest` becomes a full
+release and claims the *latest* mark; `next` publishes as a **(beta)**
+pre-release and `rolling` as an **(alpha)** pre-release -- those two
+stay pre-releases forever, that is their grade, not a pending
+promotion.
+
+Which media a release gets is the registry's call: one bluespin ISO
+per architecture the branch index serves (so a `latest` release gets
+no arm ISO while stable is 44, a condition that retires when stable
+switches to 45), dx and surface ISOs where their tags exist, and the
+FP5 disk image only on the branch `bluespin-fp5` publishes. A
+`rolling` release works the moment on-demand builds have published
+rawhide's images, and fails visibly before.
+
+The same flow works by hand, because the media build *after* the
+release event fires: publish as a **pre-release** first and promote
+once the assets have landed -- promotion fires no `published` event,
+so nothing rebuilds:
+
+```bash
+gh release create 44.20260825.1 --prerelease --generate-notes --title "bluespin 44.20260825.1"
+# wait for the "Build Installer" and "Build Disk"
+# runs to attach their assets; re-run a failed leg (re-runs overwrite
+# their assets), then:
+gh release edit 44.20260825.1 --prerelease=false --latest
+```
+
+Promote (and mark `--latest`) only the stable branch's releases; a
+next or rolling release keeps its pre-release flag.
+
 ## Switching to bluespin
 
 From an existing bootc/atomic Fedora system:
@@ -129,9 +173,10 @@ signature-verified on-device. To verify manually:
 cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 ```
 
-Every floating bluespin tag -- `44`, `45`, `latest`, their dated
-aliases, and `rawhide` once an on-demand build has published it --
-serves a manifest index, multi-arch (x86_64 + aarch64) on 45, arm's
+Every floating bluespin tag -- the branches `44` and `45`, the
+channels `latest`/`next`/`rolling` (stable, branched, rawhide), their
+dated aliases, and `rawhide` once an on-demand build has published it
+-- serves a manifest index, multi-arch (x86_64 + aarch64) on 45, arm's
 stable branch. The per-arch images and the index
 over them are each cosign-signed -- verification holds whether a client
 resolves the index or an instance -- and `bootc switch` on an aarch64
@@ -380,7 +425,9 @@ all come from Flathub, validated in CI.
 
 Live installer ISOs are built with
 [Titanoboa](https://github.com/ublue-os/titanoboa) directly from the
-published images — the same mechanism Bluefin and Bazzite use. Trigger the
-[`Build Bluespin ISOs`](.github/workflows/build-installer.yml) workflow from the
-Actions tab; it produces one ISO per variant (with checksums) as workflow
-artifacts.
+published images — the same mechanism Bluefin and Bazzite use. Publishing
+a release builds them onto that release (see [Cutting a
+release](#cutting-a-release)); a hand-dispatch of the
+[`Build Installer`](.github/workflows/build-installer.yml) workflow
+names any image tag and produces the same ISOs (with checksums) as
+workflow artifacts only.

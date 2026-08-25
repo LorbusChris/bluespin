@@ -8,11 +8,11 @@
 # why it is its own workflow, fired on the build run's completion,
 # acquiring each leg's image the same way every follow-on workflow does.
 # The report runs the image, so arm legs report on an arm runner.
-name: GNOME compatibility report
+name: Validate GNOME Extensions
 on:
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
 

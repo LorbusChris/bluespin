@@ -18,11 +18,11 @@
 # 330 findings on this image were that noise), so grype reads it
 # instead. Report-only by design: a distro image always carries open RPM
 # CVEs, so a gate would simply stay red.
-name: Scan Bluespin images
+name: Scan
 on:
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
 

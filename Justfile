@@ -8,6 +8,7 @@ export image_desc := env_var("IMAGE_DESC")
 export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_fedora_branch := env_var("DEFAULT_FEDORA_BRANCH")
+export next_fedora_branch := env_var("NEXT_FEDORA_BRANCH")
 export chunkah_image := env_var("CHUNKAH_IMAGE")
 
 # Flashable disk images (bluespin-fp5 only). env() rather than env_var() so a
@@ -282,6 +283,21 @@ generate-build-tags $target_image=image_name $fedora_branch=default_fedora_branc
         BUILD_TAGS+=("latest" "latest-${DATE}" "${DATE}")
         if [[ -n "${GIT_SHA}" ]]; then
             BUILD_TAGS+=("latest-${GIT_SHA}" "latest-${DATE}-${GIT_SHA}" "${DATE}-${GIT_SHA}")
+        fi
+    fi
+
+    # The other channel aliases: next is the branched pre-release's,
+    # rolling is rawhide's. Only latest owns the bare date tag.
+    if [[ "${fedora_branch}" == "{{ next_fedora_branch }}" ]]; then
+        BUILD_TAGS+=("next" "next-${DATE}")
+        if [[ -n "${GIT_SHA}" ]]; then
+            BUILD_TAGS+=("next-${GIT_SHA}" "next-${DATE}-${GIT_SHA}")
+        fi
+    fi
+    if [[ "${fedora_branch}" == "rawhide" ]]; then
+        BUILD_TAGS+=("rolling" "rolling-${DATE}")
+        if [[ -n "${GIT_SHA}" ]]; then
+            BUILD_TAGS+=("rolling-${GIT_SHA}" "rolling-${DATE}-${GIT_SHA}")
         fi
     fi
 

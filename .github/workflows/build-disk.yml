@@ -6,13 +6,12 @@
 # images existing devices update from, and this ~10 GiB job runs when a
 # GitHub release is published -- the artifact lands on that release -- or
 # by hand. One f45 release builds the first flashable image; every build
-# after it is an update, not an installation. Pull requests do not come
-# through here: a PR has no published tag to pull.
-name: Build Bluespin FP5 disk image
-# workflow_call deliberately absent until something actually calls this --
-# a dead trigger is a second copy of the input schema to keep in sync and an
-# invitation to assume automation exists. Add it in the same PR as the first
-# caller.
+# after it is an update, not an installation. Releases are per Fedora
+# branch, and only a release whose branch bluespin-fp5 actually publishes
+# gets a disk image: a 44 release skips this with a notice instead of
+# attaching a 45 phone image to it. Pull requests do not come through
+# here: a PR has no published tag to pull.
+name: Build Disk
 on:
   release:
     types:
@@ -22,7 +21,7 @@ on:
   # to build the flashable image from it
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
   workflow_dispatch:
@@ -36,19 +35,74 @@ on:
         description: 'optional release to upload the archive to'
         type: string
         required: false
+  # release.yml calls this to build a pre-release's disk image onto it
+  # before promoting -- it cannot go through the release event, which a
+  # GITHUB_TOKEN-created release never fires
+  workflow_call:
+    inputs:
+      tag:
+        description: 'bluespin-fp5 tag to build from'
+        type: string
+        required: true
+      release_id:
+        description: 'release to upload the archive to'
+        type: string
+        required: false
 
 env:
   IMAGE_NAME: bluespin-fp5
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  # The file's own name as a literal, not github.workflow: under
+  # workflow_call that context names the CALLER, and the release
+  # workflow's two media calls must not land in one group and cancel
+  # each other
+  group: build-disk-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
+  # A release names its branch in its tag ("45.0" -> 45); a dispatch
+  # names the tag directly. Whether that branch has a phone image is the
+  # registry's call: the ~10 GiB build below runs only when
+  # bluespin-fp5:<tag> resolves.
+  plan-release:
+    name: plan (release)
+    if: ${{ github.event_name != 'workflow_run' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.map.outputs.tag }}
+      build: ${{ steps.map.outputs.build }}
+    steps:
+      - name: Resolve the tag
+        id: map
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
+          reg="${IMAGE_REGISTRY,,}"
+          if [[ -n "${INPUT_TAG}" ]]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="$(grep -oE '4[0-9]|rawhide' <<< "${RELEASE_TAG}" | head -1 || true)"
+            tag="${tag:-45}"
+          fi
+          if skopeo inspect --no-tags --format '{{.Digest}}' \
+              "docker://${reg}/${IMAGE_NAME}:${tag}" > /dev/null 2>&1; then
+            build=true
+          else
+            build=false
+            echo "::notice::${IMAGE_NAME}:${tag} is not published; this release ships no FP5 disk image"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "build=${build}" >> "$GITHUB_OUTPUT"
+
   disk:
     name: Build FP5 disk image
-    if: ${{ github.event_name != 'workflow_run' }}
+    needs: plan-release
+    if: ${{ github.event_name != 'workflow_run' && needs.plan-release.outputs.build == 'true' }}
     # 24.04, NOT 26.04. pocketblue moved every job to 26.04-arm and then moved
     # the disk-image job specifically back (pocketblue d729297); the container
     # jobs stayed. Do not rediscover that.
@@ -83,9 +137,7 @@ jobs:
       - name: Resolve the image reference
         id: ref
         env:
-          # Empty on release events (inputs exist only for dispatch); the
-          # fp5 image has exactly one branch, so the fallback is not a guess
-          TAG: ${{ inputs.tag || '45' }}
+          TAG: ${{ needs.plan-release.outputs.tag }}
         run: |
           # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
           {
@@ -105,7 +157,7 @@ jobs:
         uses: ./.github/actions/fp5-disk-image
         with:
           image-ref: ${{ steps.ref.outputs.image_ref }}
-          artifact-suffix: ${{ inputs.tag }}
+          artifact-suffix: ${{ needs.plan-release.outputs.tag }}
 
       - name: Upload release artifact
         # A release event names its own release; a dispatch can name one
@@ -114,7 +166,10 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           release_id: ${{ inputs.release_id || github.event.release.id }}
-          file: ${{ env.IMAGE_NAME }}-${{ inputs.tag }}.7z
+          file: ${{ env.IMAGE_NAME }}-${{ needs.plan-release.outputs.tag }}.7z
+          # A re-run of a failed or partial release run must be able to
+          # replace what an earlier attempt attached
+          overwrite: true
 
   # The pull-request path: read the completed build run's plan and build
   # the flashable image from the fp5 leg's shared artifact. Loaded with
