@@ -112,6 +112,33 @@ image, and attaches them there. The daily builds publish only the OCI
 images below -- existing installs update from those; nobody reinstalls
 to update.
 
+### Cutting a release
+
+Releases are per Fedora branch, and the branch is read from the release
+tag -- `45.0`, `f45`. Which media a release gets is the registry's
+call: one bluespin ISO per architecture the branch index serves (so a
+44 release gets no arm ISO), dx and surface ISOs where their tags
+exist, and the FP5 disk image only on the branch `bluespin-fp5`
+publishes. A rawhide release works the moment on-demand builds have
+published rawhide's images, and fails visibly before -- there is
+rarely a reason to cut one, since rawhide's consumers rebase from an
+existing install.
+
+The media build *after* the release event fires, so publish as a
+**pre-release** first and promote once the assets have landed --
+promotion fires no `published` event, so nothing rebuilds:
+
+```bash
+gh release create 45.0 --prerelease --generate-notes --title "bluespin 45.0"
+# wait for the "Build Bluespin ISOs" and "Build Bluespin FP5 disk image"
+# runs to attach their assets; re-run a failed leg (re-runs overwrite
+# their assets), then:
+gh release edit 45.0 --prerelease=false --latest
+```
+
+Mark only the default branch's release `--latest`; pass
+`--latest=false` when promoting an older branch's release.
+
 ## Switching to bluespin
 
 From an existing bootc/atomic Fedora system:
@@ -380,7 +407,9 @@ all come from Flathub, validated in CI.
 
 Live installer ISOs are built with
 [Titanoboa](https://github.com/ublue-os/titanoboa) directly from the
-published images — the same mechanism Bluefin and Bazzite use. Trigger the
-[`Build Bluespin ISOs`](.github/workflows/build-installer.yml) workflow from the
-Actions tab; it produces one ISO per variant (with checksums) as workflow
-artifacts.
+published images — the same mechanism Bluefin and Bazzite use. Publishing
+a release builds them onto that release (see [Cutting a
+release](#cutting-a-release)); a hand-dispatch of the
+[`Build Bluespin ISOs`](.github/workflows/build-installer.yml) workflow
+names any image tag and produces the same ISOs (with checksums) as
+workflow artifacts only.
