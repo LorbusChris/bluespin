@@ -64,7 +64,7 @@ jobs:
 
       # attest.yml reads the plan from THIS run
       - name: Pass the plan along
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plan
           path: plan.json
@@ -135,7 +135,7 @@ jobs:
           rm -f /tmp/image.oci sbom.full.json sbom.syft.full.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}
           path: |
@@ -164,7 +164,7 @@ jobs:
       # main is the state worth tracking
       - name: Upload vulnerability report to code scanning
         if: ${{ needs.plan.outputs.event != 'pull_request' }}
-        uses: github/codeql-action/upload-sarif@df559355d593797519d70b90fc8edd5db049e7a2 # v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: grype.sarif
           category: grype-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}
