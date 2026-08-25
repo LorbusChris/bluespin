@@ -166,6 +166,26 @@ dnf -y copr enable lorbus/calls
 dnf -y install calls
 dnf -y copr disable lorbus/calls
 
+# cosign, to verify the very images and attestations this machine runs and
+# lets its owner build. Fedora does not package it; sigstore publishes RPMs
+# with every release, pinned here the way starship.sh pins its binary:
+# exact version, exact checksum. Renovate bumps the version (manager in
+# renovate.json5) and the checksum mismatch that follows is the loud
+# reminder to update the hash from the release's cosign_checksums.txt.
+# renovate: datasource=github-releases depName=sigstore/cosign
+COSIGN_VERSION=v3.1.3
+COSIGN_RPM_SHA256=2e126115465ba55d03d3aea606cced2a24a1df578c8feb1d9384d584ebda9226
+cosign_rpm="$(mktemp -d)/cosign.rpm"
+curl -fsSL --retry 3 -o "${cosign_rpm}" \
+    "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-${COSIGN_VERSION#v}-1.x86_64.rpm"
+cosign_got="$(sha256sum "${cosign_rpm}" | cut -d' ' -f1)"
+if [[ "${cosign_got}" != "${COSIGN_RPM_SHA256}" ]]; then
+    echo "::error::cosign ${COSIGN_VERSION} x86_64 rpm hashes to ${cosign_got}, expected ${COSIGN_RPM_SHA256}" >&2
+    exit 1
+fi
+dnf -y install "${cosign_rpm}"
+rm -f "${cosign_rpm}"
+
 # VS Code from Microsoft's repo, enabled only for this transaction so the repo
 # is never left active in the image
 tee /etc/yum.repos.d/vscode.repo << 'EOF'
