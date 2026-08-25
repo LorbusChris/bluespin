@@ -1,0 +1,141 @@
+---
+# One click from the Actions tab to a released branch: pick 44, 45 or
+# rawhide, and this cuts a pre-release tagged <branch>.N, builds its
+# install media onto it, and promotes it to a full release only when
+# every media job is green -- the README's "Cutting a release" flow as
+# a single dispatch.
+#
+# The ordering cannot use the release event, and does not want to: a
+# release created with the workflow's own GITHUB_TOKEN fires no
+# `published` event (GitHub's recursion guard), so the media workflows
+# are invoked directly as reusable workflows -- and the same guard
+# conveniently keeps the pre-release from triggering them a second
+# time. The release is marked latest on promotion only when its branch
+# is bluespin.env's default.
+#
+# A failed run leaves the pre-release in place with whatever assets
+# made it. Re-run the failed jobs -- uploads overwrite, and promotion
+# happens once everything is green -- or delete the pre-release and
+# its tag, and dispatch anew.
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Fedora branch to release'
+        type: choice
+        options:
+          - '44'
+          - '45'
+          - 'rawhide'
+        default: '44'
+
+concurrency:
+  # Serialize releases of one branch; different branches may overlap.
+  # Never cancel: a half-cut release is worse than a queued one.
+  group: release-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    name: cut pre-release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.cut.outputs.tag }}
+      release_id: ${{ steps.cut.outputs.release_id }}
+      make_latest: ${{ steps.cut.outputs.make_latest }}
+    steps:
+      # For bluespin.env, which knows the default branch
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Cut the pre-release
+        id: cut
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          set -euo pipefail
+          # The next free <branch>.N, counted over every release ever
+          # cut -- a tag once used stays used, even by a deleted or
+          # never-promoted release's leftovers
+          n="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate \
+              --jq '.[].tag_name' \
+            | { grep -E "^${BRANCH}\.[0-9]+$" || true; } \
+            | sed "s/^${BRANCH}\.//" | sort -n | tail -1)"
+          tag="${BRANCH}.$(( ${n:--1} + 1 ))"
+
+          source bluespin.env
+          make_latest=false
+          if [[ "${BRANCH}" == "${DEFAULT_FEDORA_BRANCH}" ]]; then
+            make_latest=true
+          fi
+
+          # Created through the API to get the id back in one call;
+          # the tag lands on the default branch's HEAD
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+            -f tag_name="${tag}" \
+            -f name="bluespin ${tag}" \
+            -F prerelease=true \
+            -F generate_release_notes=true \
+            --jq '.id')"
+          echo "cut pre-release ${tag} (${release_id})"
+
+          {
+            echo "tag=${tag}"
+            echo "release_id=${release_id}"
+            echo "make_latest=${make_latest}"
+          } >> "$GITHUB_OUTPUT"
+
+  # The called jobs upload straight onto the pre-release. The grants
+  # here must cover every permission the called workflows' jobs declare
+  # (their skipped PR-path jobs included), or the calls startup-fail.
+  installer:
+    name: installer media
+    needs: cut
+    permissions:
+      contents: write
+      actions: read
+      statuses: write
+    uses: ./.github/workflows/build-installer.yml
+    with:
+      tag: ${{ inputs.branch }}
+      release_id: ${{ needs.cut.outputs.release_id }}
+
+  disk:
+    name: disk media
+    needs: cut
+    permissions:
+      contents: write
+      actions: read
+      statuses: write
+    uses: ./.github/workflows/build-disk.yml
+    with:
+      tag: ${{ inputs.branch }}
+      release_id: ${{ needs.cut.outputs.release_id }}
+
+  promote:
+    name: promote on green
+    needs:
+      - cut
+      - installer
+      - disk
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Promote to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_ID: ${{ needs.cut.outputs.release_id }}
+          MAKE_LATEST: ${{ needs.cut.outputs.make_latest }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F prerelease=false \
+            -f make_latest="${MAKE_LATEST}" \
+            --jq '.html_url'
+          echo "promoted ${TAG}" >> "$GITHUB_STEP_SUMMARY"

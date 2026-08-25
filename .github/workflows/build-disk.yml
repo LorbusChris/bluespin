@@ -12,10 +12,6 @@
 # attaching a 45 phone image to it. Pull requests do not come through
 # here: a PR has no published tag to pull.
 name: Build Bluespin FP5 disk image
-# workflow_call deliberately absent until something actually calls this --
-# a dead trigger is a second copy of the input schema to keep in sync and an
-# invitation to assume automation exists. Add it in the same PR as the first
-# caller.
 on:
   release:
     types:
@@ -39,13 +35,30 @@ on:
         description: 'optional release to upload the archive to'
         type: string
         required: false
+  # release.yml calls this to build a pre-release's disk image onto it
+  # before promoting -- it cannot go through the release event, which a
+  # GITHUB_TOKEN-created release never fires
+  workflow_call:
+    inputs:
+      tag:
+        description: 'bluespin-fp5 tag to build from'
+        type: string
+        required: true
+      release_id:
+        description: 'release to upload the archive to'
+        type: string
+        required: false
 
 env:
   IMAGE_NAME: bluespin-fp5
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  # The file's own name as a literal, not github.workflow: under
+  # workflow_call that context names the CALLER, and the release
+  # workflow's two media calls must not land in one group and cancel
+  # each other
+  group: build-disk-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:

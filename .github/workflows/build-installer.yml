@@ -39,9 +39,30 @@ on:
         type: string
         required: false
         default: 'latest'
+      release_id:
+        description: 'optional release to upload the ISOs to'
+        type: string
+        required: false
+  # release.yml calls this to build a pre-release's ISOs onto it before
+  # promoting -- it cannot go through the release event, which a
+  # GITHUB_TOKEN-created release never fires
+  workflow_call:
+    inputs:
+      tag:
+        description: 'image tag to build the ISOs from'
+        type: string
+        required: true
+      release_id:
+        description: 'release to upload the ISOs to'
+        type: string
+        required: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  # The file's own name as a literal, not github.workflow: under
+  # workflow_call that context names the CALLER, and the release
+  # workflow's two media calls must not land in one group and cancel
+  # each other
+  group: build-installer-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -159,11 +180,13 @@ jobs:
           retention-days: 7
 
       - name: Upload release artifacts
-        if: ${{ github.event_name == 'release' }}
+        # A release event names its own release; a call or dispatch can
+        # name one
+        if: ${{ inputs.release_id || github.event_name == 'release' }}
         uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # 2.11.5
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          release_id: ${{ github.event.release.id }}
+          release_id: ${{ inputs.release_id || github.event.release.id }}
           file: ${{ steps.build.outputs.iso-dest }}*
           file_glob: true
           # A re-run of a failed or partial release run must be able to

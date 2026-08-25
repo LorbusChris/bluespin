@@ -124,9 +124,19 @@ published rawhide's images, and fails visibly before -- there is
 rarely a reason to cut one, since rawhide's consumers rebase from an
 existing install.
 
-The media build *after* the release event fires, so publish as a
-**pre-release** first and promote once the assets have landed --
-promotion fires no `published` event, so nothing rebuilds:
+The one-click path is the [`Release`](.github/workflows/release.yml)
+workflow: dispatch it from the Actions tab, pick the branch, done. It
+cuts a pre-release tagged `<branch>.N`, builds the branch's media onto
+it, and promotes it to a full release only when every media job is
+green -- marked latest exactly when the branch is the default one. A
+failed run leaves the pre-release in place: re-run the failed jobs
+(uploads overwrite) and promotion follows, or delete the pre-release
+and its tag and dispatch anew.
+
+The same flow works by hand, because the media build *after* the
+release event fires: publish as a **pre-release** first and promote
+once the assets have landed -- promotion fires no `published` event,
+so nothing rebuilds:
 
 ```bash
 gh release create 45.0 --prerelease --generate-notes --title "bluespin 45.0"
