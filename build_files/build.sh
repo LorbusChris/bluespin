@@ -6,14 +6,9 @@
 #   IMAGE_NAME  the platform: bluespin, bluespin-dx or bluespin-surface.
 #               Chooses the content layered on top.
 #
-#   the base    detected, not declared. Every platform is built per Fedora
-#               branch, and the branch picks the base (bluespin.env): Bluefin
-#               for 44, plain Fedora Silverblue for 45 and rawhide. A Universal
-#               Blue base already ships uupd, ujust, Homebrew, the flatpak
-#               preinstall service and its own vendored GNOME extensions;
-#               Silverblue ships none of them, so they are supplied here
-#               instead. Everything that follows the bootstrap is the same on
-#               either.
+#   the branch  which Fedora Silverblue this is built on (bluespin.env). Every
+#               branch uses the same base image family, so the build is one
+#               sequence rather than a per-base fork.
 #
 # The sections are numbered because their order carries dependencies: the
 # signing policy needs jq, the extension override needs every enabled
@@ -27,15 +22,10 @@ source /ctx/build_files/signing.sh
 source /ctx/build_files/extensions.sh
 # shellcheck source=build_files/silverblue_base.sh
 source /ctx/build_files/silverblue_base.sh
-# shellcheck source=build_files/kmods.sh
-source /ctx/build_files/kmods.sh
-
-# Universal Blue images carry their identity here (image-name, base, flavor);
-# Fedora's own images have nothing of the kind. This is the property the
-# base-specific blocks below actually depend on, so it is what gets tested.
-base_is_ublue() {
-    [[ -f /usr/share/ublue-os/image-info.json ]]
-}
+# shellcheck source=build_files/starship.sh
+source /ctx/build_files/starship.sh
+# shellcheck source=build_files/desktop.sh
+source /ctx/build_files/desktop.sh
 
 # dnf5 fails a remove for a package that is not installed, and the bases differ
 # in what they ship. These are "must not be in the image" removals, so a package
@@ -54,75 +44,93 @@ remove_if_installed() {
     fi
 }
 
+# Set a key in /usr/lib/os-release, appending it if the base did not have one.
+# /etc/os-release is a symlink to this file on both bases.
+os_release_set() {
+    local key=$1 value=$2 file=/usr/lib/os-release
+    if grep -q "^${key}=" "${file}"; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
+    else
+        echo "${key}=${value}" >> "${file}"
+    fi
+}
+
 ############################################################################
 # 1. The base: take what it provides, supply what it does not.
 ############################################################################
 
 # Flatpaks are installed at boot from /usr/share/flatpak/preinstall.d. Note:
 # preinstall tracks these entries, so removing one later uninstalls the app
-# from users' systems.
+# from users' systems. One system set for every platform; everything else is
+# an opt-in per-user catalog (see the install-flatpaks recipe).
 PREINSTALL_FILES=(
-    /ctx/files/usr/share/flatpak/preinstall.d/bluespin.preinstall
-    /ctx/files/usr/share/flatpak/preinstall.d/bluespin-extra.preinstall
+    /ctx/files/usr/share/flatpak/preinstall.d/desktop.preinstall
 )
 
-if base_is_ublue; then
-    # The base enables flatpak-preinstall.service and ships the Flathub remote;
-    # only the entries are ours
-    install -Dm0644 -t /usr/share/flatpak/preinstall.d/ "${PREINSTALL_FILES[@]}"
-    install -Dm0644 -t /usr/share/ublue-os/homebrew/ /ctx/files/usr/share/ublue-os/homebrew/*.Brewfile
+# The update daemon, from ublue's COPR, and the ujust library, vendored and
+# curated under files/ -- see silverblue_base.sh for both.
+install_uupd
+install_ujust
 
-    # Remove the base's brew-preinstall mechanism (a user service that installs
-    # Homebrew packages from the network at first login). Its system-cli tools
-    # (fzf, htop, rclone, tmux, starship, ...) are already in the image as RPMs or
-    # binaries shipped by the base, so brew was only shadowing them in PATH;
-    # bluefinctl (manages bluefin channels/rebases that don't apply to this image)
-    # and the chairlift cask are dropped entirely.
-    rm -f /usr/share/ublue-os/homebrew/preinstall.d/*.Brewfile \
-        /usr/lib/systemd/user/brew-preinstall.service \
-        /usr/lib/systemd/user-preset/01-brew-preinstall.preset
+# Silverblue has neither the Flathub remote nor a preinstall unit, so supply
+# both along with the entries. Bazaar and Gradia come from these -- without
+# them the bazaar/gradia integration extensions have nothing to integrate with.
+install_flathub_and_preinstall "${PREINSTALL_FILES[@]}"
 
-    # The base's dx flatpak Brewfile is superseded by our preinstall.d set; our
-    # own system-flatpaks.Brewfile ships as a stub that masks the base's copy so
-    # `ujust install-system-flatpaks` stays a working no-op
-    rm -f /usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile
-else
-    # Plain Fedora Silverblue. Universal Blue publishes nothing above F44 --
-    # base-main, silverblue-main, akmods and bluefin all stop there -- which is
-    # why the 45 and rawhide legs land here, and why they deliberately do
-    # WITHOUT:
-    #
-    #   * the DX layer (docker-ce has no f45 build either), Bluefin's nine bundled
-    #     extensions (our forks stand in, see section 5), branding and the
-    #     Homebrew stack
-    #
-    # Codecs and v4l2loopback used to be on that list too; both are now built
-    # here for every branch (section 7 and install_multimedia_stack below).
-    #
-    # What they do get is everything below: our packages, our extensions, and
-    # the shell-version assertion that turns "silently disabled on the new
-    # GNOME" into a build failure -- which is what the rawhide leg exists to
-    # find out.
+# The opt-in flatpak catalogs (`ujust install-flatpaks`): per-user sets
+# beyond the preinstalled system apps -- extra (general desktop) and dx
+# (developer GUIs). Both ship on every platform: opting in is a choice,
+# not a platform property. Validated by the same CI workflow as the
+# preinstalls.
+install -Dm0644 -t /usr/share/bluespin/flatpaks \
+    /ctx/files/usr/share/bluespin/flatpaks/*.list
 
-    # uupd and ujust, from ublue's COPR, which builds for releases their images
-    # do not cover -- what makes a plain-Fedora bluespin possible at all
-    install_ublue_tools
-
-    # Neither the Flathub remote nor the preinstall unit exists here, so supply
-    # both along with the entries. Bazaar and Gradia come from these -- without
-    # them the bazaar/gradia integration extensions would have nothing to
-    # integrate with.
-    install_flathub_and_preinstall "${PREINSTALL_FILES[@]}"
-
-    # Full codecs and hardware video decode, from RPMFusion. The Bluefin base
-    # gets the equivalent from negativo17, which has no tree above F44 -- this
-    # is the piece that used to make a plain-Fedora bluespin second-rate.
-    install_multimedia_stack
-fi
+# Full codecs and hardware video decode, from RPMFusion.
+install_multimedia_stack
 
 ############################################################################
-# 2. Launchers
+# 2. Identity and launchers
 ############################################################################
+
+# Say what this image actually is. Inherited unedited, os-release claims to be
+# whatever the base was: on Bluefin that means NAME="Bluefin" and a
+# BUG_REPORT_URL pointing at ublue's tracker, so a bluespin user's fastfetch --
+# and their bug reports -- name someone else's project. The Fedora bases have
+# the same problem with Fedora's tracker. Only the identity fields change;
+# VERSION_ID, SUPPORT_END and the Fedora bugzilla hints stay, because they
+# describe the underlying release and are still true.
+#
+# ID stays "fedora" on purpose: dnf's copr plugin builds its chroot name from
+# $ID-$VERSION_ID, so a
+# custom ID asks for a chroot nobody publishes -- it breaks `dnf copr enable`
+# both in this build and, worse, for anyone using copr on the installed
+# system, which matters for an image that ships copr-cli and fedora-packager.
+# Fedora's own convention is to keep ID and distinguish in VARIANT_ID, which
+# is what Workstation does, so that is what bluespin does too.
+fedora_version="$(sed -n 's/^VERSION_ID=//p' /usr/lib/os-release)"
+os_release_set NAME '"bluespin"'
+os_release_set ID 'fedora'
+os_release_set VARIANT_ID 'bluespin'
+os_release_set VERSION "\"${FEDORA_BRANCH:-${fedora_version}} (Silverblue)\""
+os_release_set PRETTY_NAME "\"${IMAGE_NAME} (Fedora Linux ${fedora_version})\""
+os_release_set CPE_NAME "\"cpe:/o:lorbuschris:bluespin:${fedora_version}\""
+os_release_set DEFAULT_HOSTNAME '"bluespin"'
+os_release_set HOME_URL '"https://github.com/LorbusChris/bluespin"'
+os_release_set DOCUMENTATION_URL '"https://github.com/LorbusChris/bluespin#readme"'
+os_release_set SUPPORT_URL '"https://github.com/LorbusChris/bluespin/issues"'
+os_release_set BUG_REPORT_URL '"https://github.com/LorbusChris/bluespin/issues"'
+os_release_set IMAGE_ID "\"${IMAGE_NAME}\""
+os_release_set IMAGE_VERSION "\"${FEDORA_BRANCH:-${fedora_version}}\""
+# These described the BASE's build, not ours, and nothing regenerates them
+sed -i '/^OSTREE_VERSION=/d;/^BUILD_ID=/d' /usr/lib/os-release
+
+
+# Bazaar reads the system flatpak configuration -- remotes in
+# /etc/flatpak/remotes.d, where our Flathub lives -- but a flatpak sandbox
+# gets a synthesized /etc, so without this read-only widening the app store
+# may not see the very remote its catalog comes from.
+install -Dm0644 /ctx/files/usr/share/flatpak/overrides/io.github.kolunmi.Bazaar \
+    /usr/share/flatpak/overrides/io.github.kolunmi.Bazaar
 
 # A "Trash" launcher in the app grid that opens trash:/// in Files; GNOME
 # itself only reaches the trash through the Files sidebar. Its Name and
@@ -139,9 +147,37 @@ install -Dm0644 -t /usr/share/applications/ /ctx/files/usr/share/applications/tr
 # gnome-system-monitor: replaced by the Mission Center flatpak (Bluefin only
 # hides its desktop file; nothing else depends on the RPM). Bluefin ships
 # gnome-tweaks, Silverblue does not; neither image gets it.
+#
+# gnome-software: uupd owns updates on every bluespin image. With the
+# rpm-ostree plugin installed, GNOME Software drives the same deployment --
+# two updaters racing for one rpm-ostree transaction, and an update UI that
+# contradicts the one users are told to use. The Bluefin base already removes
+# both, so this only bites the Silverblue legs; removing it here keeps every
+# leg the same and survives the base changing its mind. Bazaar (preinstalled
+# flatpak) is the app store.
+#
+# The fedora-third-party stack ships a FILTERED Flathub whose definition can
+# shadow the full remote we configure -- with it gone, ours is the one
+# Flathub. fedora-workstation-repositories (disabled Chrome/PyCharm repo
+# stubs), fedora-bookmarks and fedora-chromium-config are Fedora product
+# defaults this image does not want; the background-logo extension is the
+# Fedora watermark. totem-video-thumbnailer is the legacy of the two video
+# thumbnailers Silverblue ships -- gst-thumbnailers is the one that stays,
+# and the one source of video and audio thumbnails. yelp stays: apps link
+# into it for Help.
 remove_if_installed \
     gnome-tweaks \
-    gnome-system-monitor
+    gnome-system-monitor \
+    gnome-software \
+    gnome-software-rpm-ostree \
+    fedora-third-party \
+    fedora-flathub-remote \
+    fedora-workstation-repositories \
+    fedora-bookmarks \
+    fedora-chromium-config \
+    fedora-chromium-config-gnome \
+    totem-video-thumbnailer \
+    gnome-shell-extension-background-logo
 
 # Install additional fedora packages
 ADDITIONAL_FEDORA_PACKAGES=(
@@ -153,6 +189,112 @@ ADDITIONAL_FEDORA_PACKAGES=(
     # policy below, just by ujust.
     jq
     just
+    # The ujust recipe library prompts through its ugum wrapper, which wants
+    # gum and degrades to plainer prompts without it
+    gum
+
+    # The monospace font the desktop defaults select (see desktop.sh). Fedora's
+    # adwaita-mono-fonts stays installed alongside it; only the default changes.
+    jetbrains-mono-fonts
+
+
+    # Everyday tools every platform carries (the developer set lives in dx.sh)
+    htop
+    rclone
+    restic
+    tmux
+    # terminfo for the terminals people SSH in from (kitty, foot, wezterm,
+    # ghostty, ...); without it their TERM is unknown here and the session
+    # misbehaves
+    ncurses-term
+
+    # Network filesystems and domain membership, on every platform: SMB serve
+    # and AD-join (samba/adcli/krb5), NFS automount with AD homedirs
+    # (autofs/oddjob), NFS in Files (gvfs-nfs), WebDAV as a filesystem
+    # (davfs2), and encrypted FUSE filesystems (cryfs/encfs, with the FUSE2
+    # runtime older tools expect)
+    samba
+    samba-winbind
+    adcli
+    krb5-workstation
+    krb5-pkinit
+    autofs
+    oddjob
+    oddjob-mkhomedir
+    gvfs-nfs
+    davfs2
+    cryfs
+    fuse-encfs
+    fuse
+
+    # Containerized userlands: toolbox is stock, distrobox is not -- until
+    # now it arrived only through uupd's weak Recommends, which is one
+    # --setopt=install_weak_deps=False away from vanishing. The distrobox
+    # recipes, their libdistrobox helpers and the preinstalled DistroShelf
+    # GUI all need it, so it is explicit.
+    distrobox
+
+    # Desktop glue: GTK3 apps themed like libadwaita (the flatpak twin is
+    # preinstalled; this covers host apps), Python Nautilus extensions
+    # (Nextcloud badges, gsconnect's menu), GSConnect itself -- installed,
+    # not enabled, same as the extension table treats it -- the portal that
+    # lets flatpaks run host commands, and the firewalld GUI
+    adw-gtk3-theme
+    nautilus-python
+    gnome-shell-extension-gsconnect
+    nautilus-gsconnect
+    flatpak-spawn
+    firewall-config
+
+    # Security keys: FIDO2 for login and sudo (pam-u2f + its enrolment tool)
+    # and the ykman CLI. The legacy Yubico OTP PAM stack is deliberately not
+    # here.
+    pam-u2f
+    pamu2fcfg
+    yubikey-manager
+
+    # iPhone CLIs on top of the stock mount stack (gvfs-afc/usbmuxd already
+    # make Files work): ideviceinfo, idevicesyslog, local encrypted backups
+    # via idevicebackup2. ifuse and libtatsu deliberately not included.
+    libimobiledevice-utils
+
+    # The one printer-driver family Silverblue lacks: ZjStream winprinters
+    # (HP LaserJet 1000-1022 era, some Oki/Minolta). Everything else --
+    # gutenprint, hplip, splix, c2esp, ptouch, brlaser, sane -- is stock.
+    foo2zjs
+
+    # Hardware health and power, on every platform: power-draw analysis,
+    # temperature/fan sensors, GPU top, disk S.M.A.R.T. (with its SELinux
+    # policy so smartd may run), firmware for older sound cards, and display
+    # calibration
+    powertop
+    lm_sensors
+    nvtop
+    smartmontools
+    smartmontools-selinux
+    alsa-firmware
+    argyllcms
+
+    # A better ls and a better grep, on every platform rather than only on dx.
+    # No aliases ship with them: `ls`, `grep` and friends keep meaning what
+    # they mean on every other Fedora system, and `ll` stays Fedora's. Call
+    # them by name -- eza, ug -- when you want them.
+    eza
+    ugrep
+
+    # Hardware enablement. Each of these is a udev rule set or the userspace
+    # tool that needs one; without them the devices are visible to the kernel
+    # but not reachable by an unprivileged session, which is where desktop
+    # apps and flatpaks live.
+    ddcutil             # brightness and input switching on external monitors
+    openrgb-udev-rules  # RGB peripherals, without root
+    input-remapper      # remap keys, buttons and gamepad inputs
+    solaar-udev         # Logitech Unifying receivers
+    libratbag-ratbagd   # gaming-mouse daemon; the Piper flatpak (extra
+                        # catalog) is its GUI and is dead without it
+    ykpers              # YubiKey personalisation
+    bcache-tools        # bcache userspace
+    alsa-tools-firmware # firmware loaders for some audio interfaces
 
     # Mission Center (preinstalled flatpak, replacing gnome-system-monitor
     # above) gets its per-app network usage from nethogs on the host. The
@@ -190,6 +332,14 @@ ADDITIONAL_FEDORA_PACKAGES=(
     gnome-shell-extension-workspace-indicator
 )
 
+# powerstat reads x86 RAPL/MSR counters and Fedora builds it for x86_64
+# only; the aarch64 image goes without, and `ujust check-idle-power-draw`
+# (which is why it is explicit at all -- the recipe must never depend on
+# some other package dragging it in) reports the tool as missing there.
+if [[ "$(uname -m)" == "x86_64" ]]; then
+    ADDITIONAL_FEDORA_PACKAGES+=(powerstat)
+fi
+
 dnf -y install \
     "${ADDITIONAL_FEDORA_PACKAGES[@]}"
 
@@ -218,11 +368,36 @@ setcap 'cap_net_admin,cap_net_raw,cap_dac_read_search,cap_sys_ptrace+pe' /usr/bi
 # drop them without setcap noticing
 getcap /usr/bin/nethogs | grep -q 'cap_net_raw'
 
+# Game controllers, VR headsets, Wooting and ZSA keyboards, U2F and Titan
+# security keys, Framework 16 input modules, Arduino boards, the Apple
+# SuperDrive, racing wheels: about forty udev rules, maintained by Universal
+# Blue as one package. The Bluefin base already carries the same rules as
+# unowned files its build copies in; installing the package takes ownership
+# of them, so every branch ends up with the same rules from the same source.
+dnf -y copr enable ublue-os/packages
+dnf -y install ublue-os-udev-rules oversteer-udev
+dnf -y copr disable ublue-os/packages
+
 # Our own COPR extension. Enable/install/disable so no COPR is left active in
 # the shipped image.
 dnf -y copr enable lorbus/network-displays
 dnf -y install gnome-network-displays gnome-network-displays-extension
 dnf -y copr disable lorbus/network-displays
+
+# The starship prompt, for interactive bash shells: a checksum-pinned
+# upstream binary (Fedora does not package it) -- see build_files/starship.sh
+# for the pin and the Renovate flow.
+install_starship
+
+# Tailscale, from its vendor repo. Shipped disabled (same hygiene as
+# RPMFusion and the COPRs) and enabled only for this transaction; the fedora
+# path is release-agnostic, so one repo file serves every branch. tailscaled
+# runs but stays idle until `tailscale up`; `ujust tailscale-operator` then
+# lets your user drive it without sudo.
+install -Dm0644 /ctx/files/etc/yum.repos.d/tailscale.repo \
+    /etc/yum.repos.d/tailscale.repo
+dnf -y install --enablerepo=tailscale-stable tailscale
+systemctl enable tailscaled.service
 
 ############################################################################
 # 4. Signing. Every image we publish is cosign-signed, so every image must
@@ -230,16 +405,14 @@ dnf -y copr disable lorbus/network-displays
 ############################################################################
 install_signing_policy
 
-# The bluespin MOK certificate and its ujust enrolment recipe ship on every
-# platform: enrolling it is what lets the v4l2loopback module (section 7)
-# load under Secure Boot anywhere, and on surface additionally the kernel
-# itself. Both bases' ujust entry points already `import?` 60-custom.just.
+# The bluespin MOK certificate ships on every platform: enrolling it is what
+# lets the v4l2loopback module (section 7) load under Secure Boot anywhere,
+# and on surface additionally the kernel itself. The enrolment recipe lives
+# in 60-custom.just, installed with the vendored ujust library in section 1.
 install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.der \
     /usr/lib/pki/bluespin-secureboot.der
 install -Dm0644 /ctx/files/usr/lib/pki/bluespin-secureboot.pem \
     /usr/lib/pki/bluespin-secureboot.pem
-install -Dm0644 /ctx/files/usr/share/ublue-os/just/60-custom.just \
-    /usr/share/ublue-os/just/60-custom.just
 
 ############################################################################
 # 5. GNOME Shell extensions
@@ -268,27 +441,30 @@ mapfile -t ENABLED_EXTENSIONS < <(enabled_extensions_for_platform "${IMAGE_NAME}
 assert_enabled_extensions "${ENABLED_EXTENSIONS[@]}"
 write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
 
+# Fonts, keybindings and the rest of the desktop defaults, per platform
+write_desktop_defaults "${IMAGE_NAME}"
+
 ############################################################################
 # 6. Variant layers
 ############################################################################
 
-# DX Variant
+# DX Variant: the developer layer (packages, virtualisation, containers --
+# see dx.sh). Its former flatpak preinstalls are the opt-in dx catalog now,
+# one `ujust install-flatpaks dx` away on any platform.
 if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
-    install -Dm0644 -t /usr/share/flatpak/preinstall.d/ \
-        /ctx/files/usr/share/flatpak/preinstall.d/bluespin-dx.preinstall
-
-    # The base is bluefin, not bluefin-dx, so the developer layer is ours
     /ctx/build_files/dx.sh
 fi
 
 # Surface Variant
 if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
-    # kernel-surface and iptsd from our own @mobility/surface COPR, built per
-    # Fedora branch from linux-surface's sources (LorbusChris/linux-surface,
-    # branch arkify-copr: their 7.1 series rebased onto Fedora's kernel-ark).
-    # linux-surface itself publishes for f43 only; its kernel would install
-    # on any branch, but its iptsd links libspdlog.so.1.15, which 45 and later
-    # no longer ship -- and one source for every branch beats two.
+    # The surface kernel and iptsd from our own @mobility/surface COPR,
+    # built per Fedora branch from linux-surface's patches rebased onto
+    # Fedora's kernel-ark (LorbusChris/linux, the linux-*-surface-arkify
+    # branches). The COPR packages it AS `kernel`, versioned ahead of the
+    # branch's stock kernel, so installing "the newest kernel" with the COPR
+    # enabled is what selects it. linux-surface itself publishes for f43
+    # only; its iptsd links libspdlog.so.1.15, which 45 and later no longer
+    # ship -- and one source for every branch beats two.
     #
     # NOTE: libwacom-surface{,-data} is deliberately NOT swapped in. It is not merely
     # inconvenient on F44, it is uninstallable:
@@ -307,13 +483,13 @@ if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
     # Secure Boot: the COPR signs the kernel image with Red Hat's test keys,
     # which shim does not trust, so it is re-signed below with our own MOK
     # key when the build has it. Users enroll the certificate once with
-    # `ujust enroll-bluespin-secureboot-key`.
+    # `ujust enroll-secureboot-key`.
 
-    # Remove Existing Kernel
-    # Tolerate packages the base image no longer ships (e.g. kmod-framework-laptop);
-    # under `set -e` an unconditional erase of a missing package aborts the build.
-    for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra \
-            kmod-framework-laptop kmod-v4l2loopback v4l2loopback; do
+    # Remove the stock kernel first: the COPR build replaces it under the
+    # same package names, and the image must ship exactly one kernel.
+    # Tolerate packages the base does not ship; under `set -e` an
+    # unconditional erase of a missing package aborts the build.
+    for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
         if rpm -q "$pkg" >/dev/null 2>&1; then
             rpm --erase "$pkg" --nodeps
         fi
@@ -359,58 +535,75 @@ EOF
     # Install Kernel + touch daemon. Enable/install/disable so the COPR is not
     # left active in the shipped image; enabled alongside Fedora's repos rather
     # than --repo, which would hide iptsd's Fedora dependencies (cairomm, ...)
-    # from the resolver.
+    # from the resolver -- the COPR kernel wins on version, not on exclusivity.
     dnf -y copr enable @mobility/surface
     dnf -y install --setopt=disable_excludes=* \
-        kernel-surface iptsd
+        kernel iptsd
     dnf -y copr disable @mobility/surface
 
+    # Pin what we just chose: without the lock, anything resolving kernel
+    # afterwards could pull Fedora's build back in over the COPR's.
     dnf versionlock add kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
 
-    # Regenerate initramfs
-    KERNEL_SUFFIX=""
-    QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-surface-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-surface-(|'"$KERNEL_SUFFIX"'-)//')"
+    # Regenerate initramfs. Exactly one kernel is installed now, so its EVR
+    # is THE kernel version.
+    QUALIFIED_KERNEL="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')"
+
+    # The kernel-builder stage resolved its kernel from the same COPR,
+    # independently. If it saw a different EVR (a COPR publish landing
+    # mid-build), its module and signed vmlinuz target a kernel this image
+    # does not ship -- fail now, before dracut spends a minute on it.
+    if [[ "${QUALIFIED_KERNEL}" != "$(cat /kernel-out/kver)" ]]; then
+        echo "kernel-builder built for $(cat /kernel-out/kver) but this image ships ${QUALIFIED_KERNEL}; rerun the build" >&2
+        exit 1
+    fi
+
     export DRACUT_NO_XATTR=1
     /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
     chmod 0600 "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
 
-    # Secure Boot. Only the kernel image needs a signature shim can verify:
-    # the modules were signed at build time with the kernel's own ephemeral
-    # key, which the kernel already trusts. The COPR signed vmlinuz with Red
-    # Hat's TEST keys, so re-sign it with our MOK key -- the enrolment
-    # candidate ships as /usr/lib/pki/bluespin-secureboot.der, and the ujust
-    # recipe wraps `mokutil --import` for it. The private key arrives as a
-    # podman build secret (never in the image or a layer); without it the
-    # build still succeeds and says plainly what it produced.
-    if [[ -f /run/secrets/secureboot_key ]]; then
-        dnf -y install sbsigntools
-        vmlinuz="/usr/lib/modules/${QUALIFIED_KERNEL}/vmlinuz"
-        sbsign --key /run/secrets/secureboot_key \
-            --cert /usr/lib/pki/bluespin-secureboot.pem \
-            --output "${vmlinuz}.signed" "${vmlinuz}"
-        mv "${vmlinuz}.signed" "${vmlinuz}"
-        chmod 0755 "${vmlinuz}"
-        # Fail here rather than ship a kernel that silently cannot boot with
-        # Secure Boot on
-        sbverify --cert /usr/lib/pki/bluespin-secureboot.pem "${vmlinuz}"
-        dnf -y remove sbsigntools
-    else
-        echo "::warning::no secureboot_key build secret: the surface kernel keeps the COPR's test-key signature and will not boot with Secure Boot enabled"
+    # Secure Boot. The COPR signs vmlinuz with Red Hat's TEST keys, which
+    # shim rejects, so the kernel-builder stage re-signed it with our MOK key
+    # -- when the build had the key; the private key is only ever mounted
+    # into that throwaway stage (see build_files/kernel-builder.sh, which
+    # also explains why vmlinuz is the only file that needs this). Here the
+    # signed image just replaces the packaged one. The enrolment candidate
+    # ships as /usr/lib/pki/bluespin-secureboot.der, and the ujust recipe
+    # wraps `mokutil --import` for it. Without the key the builder stage
+    # already warned; nothing to do here.
+    if [[ -f /kernel-out/vmlinuz ]]; then
+        install -m0755 /kernel-out/vmlinuz "/usr/lib/modules/${QUALIFIED_KERNEL}/vmlinuz"
     fi
 
 fi
 
 ############################################################################
-# 7. Kernel modules, built against whatever kernel sections 1-6 decided on --
-#    which is why this comes after the variant layers -- and signed with our
-#    MOK key. See build_files/kmods.sh.
+# 7. Kernel modules -- built and signed in the Containerfile's
+#    kernel-builder stage (build_files/kernel-builder.sh), so no toolchain
+#    or kernel-devel ever enters this image; here the artifacts are only
+#    installed. After the variant layers, because the surface leg decides
+#    its kernel there. (The FP5 platform, when it lands, skips this: a phone
+#    kernel needs no virtual camera.)
 ############################################################################
 
-# The Bluefin base's copy is signed with ublue's key and stops at F44;
-# ours replaces it everywhere. (The FP5 platform, when it lands, skips this:
-# a phone kernel needs no virtual camera.)
-remove_if_installed kmod-v4l2loopback
-install_v4l2loopback
+kver="$(cat /kernel-out/kver)"
+# The module dir exists iff the builder's kernel is this image's kernel:
+# guaranteed on the vanilla platforms (both stages FROM the same base),
+# asserted above for surface. This catches anything else.
+if [[ ! -d "/usr/lib/modules/${kver}" ]]; then
+    echo "kernel-builder built for ${kver}, which this image does not ship" >&2
+    exit 1
+fi
+install -Dm0644 /kernel-out/v4l2loopback.ko.xz \
+    "/usr/lib/modules/${kver}/extra/v4l2loopback/v4l2loopback.ko.xz"
+depmod -a "${kver}"
+
+# Load at boot, with the label OBS users expect -- the same configuration
+# the Bluefin base shipped
+install -Dm0644 /ctx/files/usr/lib/modules-load.d/v4l2loopback.conf \
+    /usr/lib/modules-load.d/v4l2loopback.conf
+install -Dm0644 /ctx/files/usr/lib/modprobe.d/98-v4l2loopback.conf \
+    /usr/lib/modprobe.d/98-v4l2loopback.conf
 
 ############################################################################
 # 8. Report what this image was built against, so the build log answers the
@@ -427,13 +620,4 @@ done
 ############################################################################
 # 9. Cleanup. Last, always.
 ############################################################################
-if base_is_ublue; then
-    dnf clean all
-
-    find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
-    find /var/cache/* -maxdepth 0 -type d \! -name libdnf5 \! -name rpm-ostree -exec rm -fr {} \;
-else
-    # A plain base also needs /boot emptied and /var/tmp recreated for
-    # `bootc container lint` to pass; see silverblue_base.sh
-    cleanup_silverblue_image
-fi
+cleanup_silverblue_image
