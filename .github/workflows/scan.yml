@@ -52,11 +52,13 @@ jobs:
         id: map
         run: |
           set -euo pipefail
+          # Only what names the leg: the tag suffix follows from the
+          # platform, and a matrix field would land in the job's name
           legs="$(jq -c '
-            [ (.bluespin[] | {platform: "bluespin", fedora_branch, arch, tag_suffix: ("-" + .arch)}),
-              (.dx[] | {platform: "bluespin-dx", fedora_branch, arch, tag_suffix: ""}),
-              (.surface[] | {platform: "bluespin-surface", fedora_branch, arch, tag_suffix: ""}),
-              (.fp5[] | {platform: "bluespin-fp5", fedora_branch, arch, tag_suffix: ""}) ]' plan.json)"
+            [ (.bluespin[] | {platform: "bluespin", fedora_branch, arch}),
+              (.dx[] | {platform: "bluespin-dx", fedora_branch, arch}),
+              (.surface[] | {platform: "bluespin-surface", fedora_branch, arch}),
+              (.fp5[] | {platform: "bluespin-fp5", fedora_branch, arch}) ]' plan.json)"
           {
             echo "legs=${legs}"
             echo "event=$(jq -r .event plan.json)"
@@ -70,8 +72,10 @@ jobs:
           path: plan.json
           retention-days: 1
 
+  # No name: -- a matrix name template renders raw in the checks list
+  # whenever the job is skipped, so the leg carries the display:
+  # scan (bluespin, 45, arm64)
   scan:
-    name: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, scan)
     needs: plan
     if: ${{ needs.plan.outputs.legs != '[]' }}
     runs-on: ubuntu-24.04
@@ -96,7 +100,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           fedora_branch: ${{ matrix.fedora_branch }}
-          tag_suffix: ${{ matrix.tag_suffix }}
+          tag_suffix: ${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}
           source: ${{ needs.plan.outputs.event == 'pull_request' && 'artifact' || 'registry' }}
           run-id: ${{ github.event.workflow_run.id }}
           registry: ${{ env.IMAGE_REGISTRY }}
@@ -137,7 +141,7 @@ jobs:
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: sbom-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}
+          name: sbom-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}
           path: |
             sbom.spdx.json
             sbom.syft.json
@@ -151,7 +155,7 @@ jobs:
           podman run --rm -v "${PWD}/sbom.syft.json:/sbom.json:ro" "${grype_image}" \
             sbom:/sbom.json -o sarif > grype.sarif
           {
-            echo "### Vulnerabilities: ${{ matrix.platform }}:${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}"
+            echo "### Vulnerabilities: ${{ matrix.platform }}:${{ matrix.fedora_branch }}${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}"
             echo ""
             echo "| Severity | Count |"
             echo "| --- | --- |"
@@ -167,4 +171,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: grype.sarif
-          category: grype-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}
+          category: grype-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}

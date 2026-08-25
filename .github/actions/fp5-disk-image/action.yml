@@ -7,7 +7,7 @@
 # the pull-request job loads the fp5 leg's shared-image artifact.
 # Everything after that point is identical, so it lives here once. The
 # caller must have installed just.
-name: Build FP5 disk image
+name: Build Disk Image
 description: >-
   Build, post-process, verify and archive the flashable Fairphone 5 disk
   image from a bluespin-fp5 container in root's container storage, and
