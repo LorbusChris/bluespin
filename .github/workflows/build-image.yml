@@ -131,6 +131,18 @@ jobs:
       # that needs the local image; everything downstream -- grype and the
       # attestation -- reads the SBOM, so those run as their own jobs on
       # the artifact uploaded below and never hold up this one.
+      #
+      # Package-level on purpose: syft's raw SPDX for an OS image is
+      # ~109 MB, ~90% of it the ~118k per-file entries the rpmdb owns,
+      # and as a DSSE payload that is a ~146 MB POST that Rekor's gateway
+      # refuses with a bare 502 -- deterministically, which is what failed
+      # every attest before this (the same attestation with the file
+      # inventory stripped is ~28 MB on the wire and accepted in seconds;
+      # both reproduced). grype matches on packages either way: ~8k
+      # packages with versions and licenses ARE the useful inventory, and
+      # per-file digests of a distro image were noise that made the
+      # attestation undeliverable. The jq keeps the document
+      # self-consistent: no relationship may reference a stripped entry.
       - name: Generate SBOM
         id: sbom
         run: |
@@ -138,8 +150,14 @@ jobs:
           syft_image="$(sed -n 's/^SYFT_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
           podman save --format oci-archive -o /tmp/image.oci "${IMAGE_NAME}:${FEDORA_BRANCH}"
           podman run --rm -v /tmp/image.oci:/image.oci:ro "${syft_image}" \
-            scan oci-archive:/image.oci -o spdx-json > sbom.spdx.json
-          rm -f /tmp/image.oci
+            scan oci-archive:/image.oci -o spdx-json > sbom.full.json
+          jq '
+            .files = []
+            | ([.SPDXID] + (.packages | map(.SPDXID)) | map({(.): true}) | add) as $keep
+            | .relationships = [.relationships[]
+                | select($keep[.spdxElementId] and $keep[.relatedSpdxElement])]
+          ' sbom.full.json > sbom.spdx.json
+          rm -f /tmp/image.oci sbom.full.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
