@@ -8,9 +8,9 @@
 # fp5 device layer builds FROM exactly as dx and surface build FROM the
 # amd64 instance), dx and surface on 44 and 45, fp5 on 45. Rawhide is in
 # no default matrix: its legs are opt-in, by ci label on a pull request
-# or by dispatch. Every floating bluespin tag -- 44, 45, rawhide,
-# latest, the dated aliases -- serves a manifest index, multi-arch on
-# 45.
+# or by dispatch. Every floating bluespin tag -- 44, 45, latest, the
+# dated aliases, and rawhide once an on-demand build has published it
+# -- serves a manifest index, multi-arch on 45.
 #
 # Pull requests build NOTHING by default and publish never; ci labels
 # opt legs in, and every leg is self-contained from the Containerfile's
@@ -370,9 +370,9 @@ jobs:
   # aliases -- serves a manifest index. The per-arch legs published
   # their images under per-arch instance tags (-amd64/-arm64, the OCI
   # names) and signed their own digests; this job assembles the index
-  # each branch tag actually serves (single-entry for rawhide until it
-  # grows an arm leg), repoints the aliases (latest lives with the
-  # default branch). Signing -- of these indexes and of every instance
+  # each branch tag actually serves (rawhide's only once an on-demand
+  # build has published an instance), repoints the aliases (latest
+  # lives with the default branch). Signing -- of these indexes and of every instance
   # digest -- lives in sign.yml, which fires when this run completes:
   # together the equivalent of `cosign sign --recursive`, so
   # verification finds a signature at whichever level c/image checks,
@@ -412,27 +412,33 @@ jobs:
           reg="${IMAGE_REGISTRY,,}"
           # The stitch list, with each branch's architectures (OCI names:
           # tags, platform fields and this table share one vocabulary).
-          # Rawhide's arm leg is on-demand (label or dispatch), so its
-          # instance folds into the index whenever one has been
-          # published.
+          # A shipped branch's arches are required -- their instance tags
+          # missing on a push means a leg broke, and the stitch should say
+          # so. Rawhide is built on demand only (label or dispatch), so
+          # every rawhide instance is optional: whatever has been
+          # published folds into its index, and until anything has, the
+          # branch is skipped rather than failed.
           declare -A BRANCH_ARCHES=(
             [44]="amd64"
             [45]="amd64 arm64"
-            [rawhide]="amd64"
           )
           declare -A BRANCH_OPT_ARCHES=(
-            [rawhide]="arm64"
+            [rawhide]="amd64 arm64"
           )
           source bluespin.env
           DATE=$(date +%Y%m%d)
           for branch in 44 45 rawhide; do
-            arches="${BRANCH_ARCHES[${branch}]}"
+            arches="${BRANCH_ARCHES[${branch}]:-}"
             for arch in ${BRANCH_OPT_ARCHES[${branch}]:-}; do
               if skopeo inspect --no-tags --format '{{.Digest}}' \
                   "docker://${reg}/bluespin:${branch}-${arch}" > /dev/null 2>&1; then
-                arches="${arches} ${arch}"
+                arches="${arches:+${arches} }${arch}"
               fi
             done
+            if [[ -z "${arches}" ]]; then
+              echo "::notice::no bluespin:${branch}-* instance tags published yet; skipping its index"
+              continue
+            fi
 
             podman manifest rm idx 2>/dev/null || true
             podman manifest create idx
