@@ -195,21 +195,25 @@ default branch for the GNOME we ship) and also watches each fork's
 *upstream*, so a PR appears both when a fork moves and when upstream lands
 support for the next GNOME — the moment a fork can be rebased or retired:
 
-| Extension | Source | Why vendored |
-| --- | --- | --- |
-| AppIndicator | [ubuntu/gnome-shell-extension-appindicator](https://github.com/ubuntu/gnome-shell-extension-appindicator) | upstream, pinned by us |
-| Bazaar Companion | [LorbusChris/bazaar-companion](https://github.com/LorbusChris/bazaar-companion) | not packaged by Fedora |
-| Caffeine | [LorbusChris/gnome-shell-extension-caffeine](https://github.com/LorbusChris/gnome-shell-extension-caffeine) | fork declaring the current shell |
-| Gradia Capture | [LorbusChris/gradia-capture](https://github.com/LorbusChris/gradia-capture) | not packaged by Fedora |
-| Search Light | [LorbusChris/search-light](https://github.com/LorbusChris/search-light) | fork declaring the current shell |
-| Weather or Not | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not) | dropped from Fedora after F43 |
-| NekoTorch | [gitlab.com/lorbus42](https://gitlab.com/lorbus42/NekoTorch) | only packaged in a COPR targeting shell 48 |
-| Mosaic WM | [CleoMenezesJr/MosaicWM](https://github.com/CleoMenezesJr/MosaicWM), pinned twice (`main` for GNOME 50, `gnome-51` for 51) | not packaged anywhere |
-| System Monitor | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extensions) | Fedora's build only opens GNOME System Monitor; the fork prefers Mission Center and adds CPU, GPU and disk temperature readouts |
+| Extension | Source | Upstream | Why vendored |
+| --- | --- | --- | --- |
+| AppIndicator | [ubuntu/gnome-shell-extension-appindicator](https://github.com/ubuntu/gnome-shell-extension-appindicator) | *is* upstream | upstream, pinned by us |
+| Bazaar Companion | [LorbusChris/bazaar-companion](https://github.com/LorbusChris/bazaar-companion) | [bazaar-org/bazaar-companion](https://github.com/bazaar-org/bazaar-companion) | not packaged by Fedora |
+| Caffeine | [LorbusChris/gnome-shell-extension-caffeine](https://github.com/LorbusChris/gnome-shell-extension-caffeine) | [eonpatapon/gnome-shell-extension-caffeine](https://github.com/eonpatapon/gnome-shell-extension-caffeine) | fork declaring the current shell |
+| Gradia Capture | [LorbusChris/gradia-capture](https://github.com/LorbusChris/gradia-capture) | [AlexanderVanhee/gradia-capture](https://github.com/AlexanderVanhee/gradia-capture) | not packaged by Fedora |
+| Search Light | [LorbusChris/search-light](https://github.com/LorbusChris/search-light) | [icedman/search-light](https://github.com/icedman/search-light) | fork declaring the current shell |
+| Weather or Not | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not) | [somepaulo/weather-or-not](https://gitlab.gnome.org/somepaulo/weather-or-not) | dropped from Fedora after F43 |
+| NekoTorch | [gitlab.com/lorbus42](https://gitlab.com/lorbus42/NekoTorch) | [NekoCWD/NekoTorch](https://gitlab.com/NekoCWD/NekoTorch) | only packaged in a COPR targeting shell 48 |
+| Mosaic WM | [CleoMenezesJr/MosaicWM](https://github.com/CleoMenezesJr/MosaicWM), pinned twice (`main` for GNOME 50, `gnome-51` for 51) | *is* upstream | not packaged anywhere |
+| System Monitor | [gitlab.gnome.org/lorbus](https://gitlab.gnome.org/lorbus/gnome-shell-extensions) | [GNOME/gnome-shell-extensions](https://gitlab.gnome.org/GNOME/gnome-shell-extensions) | Fedora's build only opens GNOME System Monitor; the fork prefers Mission Center and adds CPU, GPU and disk temperature readouts |
 
 Network Displays comes as an RPM from our own
 [lorbus/network-displays](https://copr.fedorainfracloud.org/coprs/lorbus/network-displays/)
-COPR, and Screen Rotate is Fedora's `gnome-shell-extension-screen-autorotate`.
+COPR (upstream:
+[GNOME/gnome-network-displays](https://gitlab.gnome.org/GNOME/gnome-network-displays)),
+and Screen Rotate is Fedora's `gnome-shell-extension-screen-autorotate`
+(upstream:
+[shyzus/gnome-shell-extension-screen-autorotate](https://github.com/shyzus/gnome-shell-extension-screen-autorotate)).
 
 What is enabled by default is one table, `enabled_extensions_for_platform`
 in [extensions.sh](build_files/extensions.sh), rendered into
