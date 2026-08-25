@@ -126,7 +126,7 @@ jobs:
     uses: ./.github/workflows/build-installer.yml
     with:
       tag: ${{ needs.cut.outputs.branch }}
-      release_id: ${{ needs.cut.outputs.release_id }}
+      release_tag: ${{ needs.cut.outputs.tag }}
 
   disk:
     name: disk media
@@ -138,7 +138,7 @@ jobs:
     uses: ./.github/workflows/build-disk.yml
     with:
       tag: ${{ needs.cut.outputs.branch }}
-      release_id: ${{ needs.cut.outputs.release_id }}
+      release_tag: ${{ needs.cut.outputs.tag }}
 
   publish:
     name: publish on green

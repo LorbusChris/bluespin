@@ -31,8 +31,8 @@ on:
         type: string
         required: true
         default: '45'
-      release_id:
-        description: 'optional release to upload the archive to'
+      release_tag:
+        description: 'optional release (by tag) to upload the archive to'
         type: string
         required: false
   # release.yml calls this to build a pre-release's disk image onto it
@@ -44,8 +44,8 @@ on:
         description: 'bluespin-fp5 tag to build from'
         type: string
         required: true
-      release_id:
-        description: 'release to upload the archive to'
+      release_tag:
+        description: 'release (by tag) to upload the archive to'
         type: string
         required: false
 
@@ -159,17 +159,24 @@ jobs:
           image-ref: ${{ steps.ref.outputs.image_ref }}
           artifact-suffix: ${{ needs.plan-release.outputs.tag }}
 
+      # gh, not an upload action: the actions that take a release id
+      # PATCH the release as they attach to it, and one of them publishing
+      # a draft is how 45.20260825.1 went public with only a phone image
+      # on it while its installers were still failing. `gh release upload`
+      # touches assets and nothing else, drafts included.
       - name: Upload release artifact
-        # A release event names its own release; a dispatch can name one
-        if: ${{ inputs.release_id || github.event_name == 'release' }}
-        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # 2.11.5
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          release_id: ${{ inputs.release_id || github.event.release.id }}
-          file: ${{ env.IMAGE_NAME }}-${{ needs.plan-release.outputs.tag }}.7z
-          # A re-run of a failed or partial release run must be able to
-          # replace what an earlier attempt attached
-          overwrite: true
+        # A release event names its own release; a call or dispatch can
+        # name one
+        if: ${{ inputs.release_tag || github.event_name == 'release' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+          ARCHIVE: ${{ env.IMAGE_NAME }}-${{ needs.plan-release.outputs.tag }}.7z
+        run: |
+          set -euo pipefail
+          # --clobber: a re-run of a failed or partial release run must be
+          # able to replace what an earlier attempt attached
+          gh release upload "${RELEASE_TAG}" "${ARCHIVE}" --clobber
 
   # The pull-request path: read the completed build run's plan and build
   # the flashable image from the fp5 leg's shared artifact. Loaded with
