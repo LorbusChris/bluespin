@@ -153,6 +153,15 @@ jobs:
         with:
           extra-squeeze: true
 
+      # Titanoboa mounts the image as a container volume out of ROOT's
+      # storage (sudo podman run --mount type=image) and pulls nothing
+      # itself -- podman does not pull for an image volume, so the image
+      # has to be there first or the mount fails with "image not known"
+      - name: Pull the image into root's storage
+        env:
+          IMAGE_REF: ghcr.io/lorbuschris/${{ matrix.image_name }}:${{ needs.plan-release.outputs.tag }}
+        run: sudo podman pull "${IMAGE_REF}"
+
       # Builds a live ISO directly from the published bootc image; the
       # container-native ISO contract layer comes from the bluefin base
       - name: Build ISO with Titanoboa
@@ -283,6 +292,8 @@ jobs:
           source: artifact
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+          # Titanoboa reads it from root's storage, under sudo
+          storage: root
 
       - name: Build ISO with Titanoboa
         id: build
