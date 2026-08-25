@@ -75,9 +75,16 @@ jobs:
               echo "::warning::${1} did not resolve -- its leg did not publish; skipping"
               return 0
             fi
+            # A digest we already signed stays signed: re-signing daily
+            # would only accrete duplicate signature layers, and a tag
+            # that no default leg rebuilds (rawhide between opt-in
+            # builds) serves the same digest for weeks
+            if cosign verify --key cosign.pub "${reg}/${1%%:*}@${digest}" > /dev/null 2>&1; then
+              echo "${1}@${digest} already signed; skipping"
+              return 0
+            fi
             # Keyed then keyless; retried, same Rekor reasoning as
-            # retry.sh explains. Idempotent: re-signing a digest already
-            # signed just layers an equivalent signature.
+            # retry.sh explains
             .github/scripts/retry.sh 3 30 \
               cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "${reg}/${1%%:*}@${digest}"
             .github/scripts/retry.sh 3 30 \
