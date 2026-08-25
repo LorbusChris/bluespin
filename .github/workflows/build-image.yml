@@ -143,27 +143,53 @@ jobs:
       # per-file digests of a distro image were noise that made the
       # attestation undeliverable. The jq keeps the document
       # self-consistent: no relationship may reference a stripped entry.
+      #
+      # One scan, two documents. SPDX is the standard the world can
+      # consume, so it is what gets attested -- but it has no field for
+      # Go function symbols, which grype needs to match Go binaries at
+      # function rather than module granularity (without them a stdlib
+      # CVE flags every Go binary whether or not it calls the affected
+      # function -- measured on this image: 92 of 330 findings were that
+      # noise). So the same scan also emits syft's native format with
+      # symbols captured, for the vulnerability-report job only: never
+      # attested, files stripped likewise, and zip takes care of the
+      # symbol bulk on the way into the artifact.
       - name: Generate SBOM
         id: sbom
         run: |
           set -euo pipefail
           syft_image="$(sed -n 's/^SYFT_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
           podman save --format oci-archive -o /tmp/image.oci "${IMAGE_NAME}:${FEDORA_BRANCH}"
-          podman run --rm -v /tmp/image.oci:/image.oci:ro "${syft_image}" \
-            scan oci-archive:/image.oci -o spdx-json > sbom.full.json
+          podman run --rm -e SYFT_GOLANG_CAPTURE_SYMBOLS=all \
+            -v /tmp/image.oci:/image.oci:ro -v "${PWD}:/out" "${syft_image}" \
+            scan oci-archive:/image.oci \
+            -o spdx-json=/out/sbom.full.json \
+            -o syft-json=/out/sbom.syft.full.json
+          # externalRefs: keep each package's purl, drop syft's generated
+          # CPE guesses -- they are heuristic, every serious consumer keys
+          # on the purl, and on the dx image they alone were ~9 MB: the
+          # difference between an attestation Rekor accepts and the 502
+          # its gateway returns above roughly 32 MiB on the wire (bluespin
+          # at ~29 MB passed, dx at ~38 MB failed, same day same code).
           jq '
             .files = []
             | ([.SPDXID] + (.packages | map(.SPDXID)) | map({(.): true}) | add) as $keep
             | .relationships = [.relationships[]
                 | select($keep[.spdxElementId] and $keep[.relatedSpdxElement])]
+            | .packages = [.packages[]
+                | if .externalRefs then .externalRefs = [.externalRefs[] | select(.referenceType == "purl")] else . end
+                | if .externalRefs == [] then del(.externalRefs) else . end]
           ' sbom.full.json > sbom.spdx.json
-          rm -f /tmp/image.oci sbom.full.json
+          jq '.files = []' sbom.syft.full.json > sbom.syft.json
+          rm -f /tmp/image.oci sbom.full.json sbom.syft.full.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-${{ inputs.platform }}-${{ inputs.fedora_branch }}
-          path: sbom.spdx.json
+          path: |
+            sbom.spdx.json
+            sbom.syft.json
 
       # What every installed extension declares against the shell this image
       # ships. This is the visibility mechanism for installed-but-disabled
@@ -305,13 +331,17 @@ jobs:
         with:
           name: sbom-${{ inputs.platform }}-${{ inputs.fedora_branch }}
 
+      # The syft-native document, not the attested SPDX: it carries the Go
+      # function symbols that let grype match at function granularity --
+      # 92 of 330 findings on this image were module-level false
+      # positives without them.
       - name: Vulnerability report
         run: |
           set -euo pipefail
           grype_image="$(sed -n 's/^GRYPE_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
-          podman run --rm -v "${PWD}/sbom.spdx.json:/sbom.json:ro" "${grype_image}" \
+          podman run --rm -v "${PWD}/sbom.syft.json:/sbom.json:ro" "${grype_image}" \
             sbom:/sbom.json -o json > grype.json
-          podman run --rm -v "${PWD}/sbom.spdx.json:/sbom.json:ro" "${grype_image}" \
+          podman run --rm -v "${PWD}/sbom.syft.json:/sbom.json:ro" "${grype_image}" \
             sbom:/sbom.json -o sarif > grype.sarif
           {
             echo "### Vulnerabilities: ${{ inputs.platform }}:${{ inputs.fedora_branch }}"
