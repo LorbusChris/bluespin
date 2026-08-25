@@ -103,13 +103,15 @@ cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 
 Every published digest additionally carries a **keyless** signature bound to
 the build workflow's OIDC identity (Fulcio certificate, logged in Rekor).
-On-device verification keeps enforcing the key; the keyless signature exists
-so a later switch is a policy change rather than a re-signing campaign. To
-verify it:
+The identity is the *reusable* workflow that actually signs --
+`build-image.yml`, not the `build.yml` caller -- because that is how
+GitHub mints OIDC tokens for reusable workflows. On-device verification
+keeps enforcing the key; the keyless signature exists so a later switch is
+a policy change rather than a re-signing campaign. To verify it:
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/build\.yml@.*' \
+  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/build-image\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/lorbuschris/bluespin:latest
 ```
