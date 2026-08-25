@@ -63,6 +63,16 @@ jobs:
   variants:
     name: ${{ matrix.platform }} (${{ matrix.fedora_branch }})
     needs: bluespin
+    # The bluespin caller job reports failure if ANY job in the called
+    # workflow fails -- the attest job included, whose failures are
+    # typically an external service flaking after the image already
+    # published (the first main run lost its 45 variants to exactly that:
+    # a Rekor 502 during attest). On pushes the variants' own Resolve step
+    # is the real gate -- no published bluespin digest, no leg -- so
+    # attempt them unless the run was cancelled. On pull requests the legs
+    # are self-contained and would only replay the same build failure, so
+    # the hard gate stays.
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.bluespin.result == 'success') }}
     strategy:
       fail-fast: false
       matrix:
