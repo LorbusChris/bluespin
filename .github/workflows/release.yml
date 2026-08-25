@@ -123,6 +123,11 @@ jobs:
       contents: write
       actions: read
       statuses: write
+      # The medium's own image is published and signed in there
+      packages: write
+      id-token: write
+    # secrets: inherit, for the cosign key that signs it
+    secrets: inherit
     uses: ./.github/workflows/build-installer.yml
     with:
       tag: ${{ needs.cut.outputs.branch }}

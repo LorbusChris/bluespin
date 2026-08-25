@@ -424,10 +424,31 @@ all come from Flathub, validated in CI.
 ## ISOs
 
 Live installer ISOs are built with
-[Titanoboa](https://github.com/ublue-os/titanoboa) directly from the
-published images — the same mechanism Bluefin and Bazzite use. Publishing
-a release builds them onto that release (see [Cutting a
-release](#cutting-a-release)); a hand-dispatch of the
-[`Build Installer`](.github/workflows/build-installer.yml) workflow
-names any image tag and produces the same ISOs (with checksums) as
-workflow artifacts only.
+[Titanoboa](https://github.com/ublue-os/titanoboa) — the same mechanism
+Bluefin and Bazzite use. Publishing a release builds them onto that
+release (see [Cutting a release](#cutting-a-release)); a hand-dispatch
+of the [`Build Installer`](.github/workflows/build-installer.yml)
+workflow names any image tag and produces the same ISOs (with
+checksums) as workflow artifacts only.
+
+Titanoboa builds an ISO out of a container image that satisfies the
+[container-native ISO contract](https://github.com/ondrejbudai/bootc-isos):
+an installer, the livesys session, an initramfs that can boot a
+squashfs, and `/usr/lib/bootc-image-builder/iso.yaml` describing the
+ISO. Bluefin bakes all of that into the images it publishes; bluespin
+does not, because an installer has no business on a machine that only
+ever updates — least of all on a phone. Instead the
+[`live`](Containerfile) stage layers it onto the image the medium
+installs (`just live-image`, [live.sh](build_files/live.sh)), and that
+layer is itself published and signed as
+`ghcr.io/lorbuschris/<platform>-live:<branch>-<arch>`: install media in
+container form, with the same provenance chain as everything else here,
+verified before it becomes an ISO. Nothing updates from a `-live` tag —
+`bootc switch` targets stay the images in the table above.
+
+Installing from that ISO runs Anaconda, which pulls the **channel
+alias** for the branch it was cut from — so a machine installed from
+stable's media follows `latest` across the next Fedora branch on its
+own, without a rebase. The first thing the installed system does is
+switch to enforcing the signature policy, and it offers the bluespin
+MOK certificate for enrolment on the way out.
