@@ -96,8 +96,27 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
     LABELS=()
 
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base}")
-    BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${target_image##*/}")
     BUILD_ARGS+=("--build-arg" "FEDORA_BRANCH=${fedora_branch}")
+
+    # The platform is a Containerfile stage (the stages set their own
+    # IMAGE_NAME; passing it as a build-arg would mislabel the shared
+    # bluespin layer inside a variant build).
+    case "${target_image##*/}" in
+        bluespin) BUILD_ARGS+=("--target" "bluespin") ;;
+        bluespin-dx) BUILD_ARGS+=("--target" "dx") ;;
+        bluespin-surface) BUILD_ARGS+=("--target" "surface") ;;
+        *)
+            echo "no Containerfile stage for platform '${target_image##*/}'" >&2
+            exit 1
+            ;;
+    esac
+
+    # CI (pushes on main) builds the variants FROM the just-pushed bluespin
+    # image; locally and on PRs the variants chain from the bluespin stage
+    # in the Containerfile instead.
+    if [[ -n "${BLUESPIN_IMAGE:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "BLUESPIN_IMAGE=${BLUESPIN_IMAGE}")
+    fi
 
     # The out-of-tree module's own version, for modinfo and dmesg. Upstream's
     # Makefile derives it with `git describe`, which cannot work inside the

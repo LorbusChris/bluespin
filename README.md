@@ -127,11 +127,7 @@ opt-in per-user catalog under
 with `ujust remove-flatpaks <set>` — per-user on purpose, so opting in
 needs no root and never touches the OS-level set.
 
-The curation was forked from Bluefin's defaults (Nov 2025, commit `1b24cf5`)
-and is maintained independently; the plain Silverblue bases preinstall
-nothing, so these files are the whole story. bluespin ships no Homebrew, so
-Bluefin's Brewfile catalogs have no counterpart here. Deliberately excluded
-from Bluefin's sets:
+Deliberately excluded from Bluefin's sets:
 
 - `org.mozilla.firefox` — Firefox is installed as an RPM instead
 
@@ -187,7 +183,10 @@ in [extensions.sh](build_files/extensions.sh), rendered into
 | every platform | AppIndicator, Bazaar Companion, Caffeine, Gradia Capture, Network Displays, Search Light |
 | `bluespin`, `bluespin-dx`, `bluespin-surface` | Weather or Not |
 | `bluespin-dx` | System Monitor, Mosaic WM |
-| `bluespin-surface` | Screen Rotate |
+
+Screen Rotate ships installed on every platform but is enabled nowhere for
+now: Fedora's RPM does not yet declare GNOME 51, and an enabled extension
+that cannot load is a warning on every 51 leg.
 
 Enabled means successfully enabled: the build fails if an extension of ours
 that a platform enables does not declare the shell the image ships (an
@@ -265,21 +264,39 @@ NO_CACHE=1 just build bluespin   # force a full rebuild (see the caveat below)
 just rechunk bluespin 44         # optional: split into update-friendly layers
 ```
 
-Every image comes from the one [Containerfile](Containerfile), in three
-stages: `ctx` (the build context), **`kernel-builder`** — everything that
-must install tooling in order to build something (gcc and kernel-devel for
-the v4l2loopback module, sbsigntools for the surface kernel) runs there and
-is thrown away, and the Secure Boot key is only ever mounted there — and
-the final image, which installs the artifacts. The branch's base comes in
-as `BASE_IMAGE` from [bluespin.env](bluespin.env), where the digests are
-pinned and Renovate tracks them. [build.sh](build_files/build.sh) is the
-single entry point, branching on `IMAGE_NAME` for the platform, with
-[silverblue_base.sh](build_files/silverblue_base.sh) supplying what a plain
-Silverblue base lacks: the updater, ujust, Flathub and the preinstall
-service, and the multimedia stack.
+Every image comes from the one [Containerfile](Containerfile), as a
+layered family selected by `--target`:
 
-CI builds the matrix daily and on every push to `main`
-(see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
+```
+base (Silverblue) → bluespin → dx
+                             → surface
+```
+
+[build.sh](build_files/build.sh) builds the **bluespin** layer — everything
+the platforms share, with
+[silverblue_base.sh](build_files/silverblue_base.sh) supplying what a plain
+Silverblue base lacks (the updater, ujust, Flathub and the preinstall
+service, the multimedia stack). The variants are thin deltas on top:
+[dx.sh](build_files/dx.sh) or [surface.sh](build_files/surface.sh), then a
+shared [variant-finish.sh](build_files/variant-finish.sh) that stamps the
+variant's identity and per-platform desktop/extension set. Two throwaway
+**kernel-builder** flavors (stock and surface) do everything that must
+install tooling in order to build something — gcc and kernel-devel for the
+v4l2loopback module, sbsigntools for the surface vmlinuz — and are the only
+stages the Secure Boot key is ever mounted into. The branch's base comes in
+as `BASE_IMAGE` from [bluespin.env](bluespin.env), where the digests are
+pinned and Renovate tracks them.
+
+Locally and on pull requests a variant build chains from the bluespin stage
+inside the Containerfile (self-contained). On pushes to `main`, CI builds
+and publishes the bluespin image first and the variant jobs then build
+`FROM` that published digest (`BLUESPIN_IMAGE`), so dx and surface never
+rebuild the bluespin content
+(see [`build.yml`](.github/workflows/build.yml) calling
+[`build-image.yml`](.github/workflows/build-image.yml)). Every published
+image is then rechunked with [chunkah](https://github.com/coreos/chunkah),
+so a client update downloads only the chunks whose packages changed. CI
+builds the matrix daily and on every push to `main`.
 
 One local-only caveat: podman keys the build cache on the base image and the
 `RUN` command, but **not** on the contents of the `ctx` stage the build

@@ -1,19 +1,18 @@
 #!/bin/bash
-# The entry point for every bluespin image. The Containerfile runs this on
-# whatever base `just build` passed in as BASE_IMAGE, and two things decide what
-# happens here:
+# The bluespin layer -- the image of that name itself, and the base every
+# variant builds on: the Containerfile's dx and surface stages layer their
+# deltas on top of this (locally on the stage, in CI on the pushed bluespin
+# image, so the variants share these exact layers and updates dedupe).
+# IMAGE_NAME is bluespin here; variant identity, desktop and extension
+# deltas are variant-finish.sh's job in those stages.
 #
-#   IMAGE_NAME  the platform: bluespin, bluespin-dx or bluespin-surface.
-#               Chooses the content layered on top.
-#
-#   the branch  which Fedora Silverblue this is built on (bluespin.env). Every
-#               branch uses the same base image family, so the build is one
-#               sequence rather than a per-base fork.
+# The branch (bluespin.env) decides which Fedora Silverblue this builds on;
+# every branch uses the same base image family, so the build is one
+# sequence rather than a per-base fork.
 #
 # The sections are numbered because their order carries dependencies: the
 # signing policy needs jq, the extension override needs every enabled
-# extension installed, the variant layers build on all of it, and cleanup
-# must be last.
+# extension installed, and cleanup must be last.
 set -xeuo pipefail
 
 # shellcheck source=build_files/signing.sh
@@ -26,6 +25,10 @@ source /ctx/build_files/silverblue_base.sh
 source /ctx/build_files/starship.sh
 # shellcheck source=build_files/desktop.sh
 source /ctx/build_files/desktop.sh
+# shellcheck source=build_files/identity.sh
+source /ctx/build_files/identity.sh
+# shellcheck source=build_files/kmod.sh
+source /ctx/build_files/kmod.sh
 
 # dnf5 fails a remove for a package that is not installed, and the bases differ
 # in what they ship. These are "must not be in the image" removals, so a package
@@ -41,17 +44,6 @@ remove_if_installed() {
     done
     if [[ ${#present[@]} -gt 0 ]]; then
         dnf -y remove "${present[@]}"
-    fi
-}
-
-# Set a key in /usr/lib/os-release, appending it if the base did not have one.
-# /etc/os-release is a symlink to this file on both bases.
-os_release_set() {
-    local key=$1 value=$2 file=/usr/lib/os-release
-    if grep -q "^${key}=" "${file}"; then
-        sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
-    else
-        echo "${key}=${value}" >> "${file}"
     fi
 }
 
@@ -92,37 +84,10 @@ install_multimedia_stack
 # 2. Identity and launchers
 ############################################################################
 
-# Say what this image actually is. Inherited unedited, os-release claims to be
-# whatever the base was: on Bluefin that means NAME="Bluefin" and a
-# BUG_REPORT_URL pointing at ublue's tracker, so a bluespin user's fastfetch --
-# and their bug reports -- name someone else's project. The Fedora bases have
-# the same problem with Fedora's tracker. Only the identity fields change;
-# VERSION_ID, SUPPORT_END and the Fedora bugzilla hints stay, because they
-# describe the underlying release and are still true.
-#
-# ID stays "fedora" on purpose: dnf's copr plugin builds its chroot name from
-# $ID-$VERSION_ID, so a
-# custom ID asks for a chroot nobody publishes -- it breaks `dnf copr enable`
-# both in this build and, worse, for anyone using copr on the installed
-# system, which matters for an image that ships copr-cli and fedora-packager.
-# Fedora's own convention is to keep ID and distinguish in VARIANT_ID, which
-# is what Workstation does, so that is what bluespin does too.
-fedora_version="$(sed -n 's/^VERSION_ID=//p' /usr/lib/os-release)"
-os_release_set NAME '"bluespin"'
-os_release_set ID 'fedora'
-os_release_set VARIANT_ID 'bluespin'
-os_release_set VERSION "\"${FEDORA_BRANCH:-${fedora_version}} (Silverblue)\""
-os_release_set PRETTY_NAME "\"${IMAGE_NAME} (Fedora Linux ${fedora_version})\""
-os_release_set CPE_NAME "\"cpe:/o:lorbuschris:bluespin:${fedora_version}\""
-os_release_set DEFAULT_HOSTNAME '"bluespin"'
-os_release_set HOME_URL '"https://github.com/LorbusChris/bluespin"'
-os_release_set DOCUMENTATION_URL '"https://github.com/LorbusChris/bluespin#readme"'
-os_release_set SUPPORT_URL '"https://github.com/LorbusChris/bluespin/issues"'
-os_release_set BUG_REPORT_URL '"https://github.com/LorbusChris/bluespin/issues"'
-os_release_set IMAGE_ID "\"${IMAGE_NAME}\""
-os_release_set IMAGE_VERSION "\"${FEDORA_BRANCH:-${fedora_version}}\""
-# These described the BASE's build, not ours, and nothing regenerates them
-sed -i '/^OSTREE_VERSION=/d;/^BUILD_ID=/d' /usr/lib/os-release
+# Say what this image actually is -- the identity fields, ID=fedora and the
+# VARIANT_ID convention are explained in identity.sh. Variant layers re-run
+# this with their own platform name.
+set_image_identity "${IMAGE_NAME}"
 
 
 # Bazaar reads the system flatpak configuration -- remotes in
@@ -445,193 +410,21 @@ write_enabled_extensions_override "${ENABLED_EXTENSIONS[@]}"
 write_desktop_defaults "${IMAGE_NAME}"
 
 ############################################################################
-# 6. Variant layers
+# 6. Variant layers used to run here. They are separate Containerfile
+#    stages now, built FROM this image (locally FROM this stage; in CI FROM
+#    the pushed bluespin image, so dx and surface share these exact layers):
+#    dx.sh + variant-finish.sh, and surface.sh + variant-finish.sh.
 ############################################################################
 
-# DX Variant: the developer layer (packages, virtualisation, containers --
-# see dx.sh). Its former flatpak preinstalls are the opt-in dx catalog now,
-# one `ujust install-flatpaks dx` away on any platform.
-if [[ "${IMAGE_NAME}" == "bluespin-dx" ]]; then
-    /ctx/build_files/dx.sh
-fi
-
-# Surface Variant
-if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
-    # The surface kernel and iptsd from our own @mobility/surface COPR,
-    # built per Fedora branch from linux-surface's patches rebased onto
-    # Fedora's kernel-ark (LorbusChris/linux, the linux-*-surface-arkify
-    # branches). The COPR packages it AS `kernel`, versioned ahead of the
-    # branch's stock kernel, so installing "the newest kernel" with the COPR
-    # enabled is what selects it. linux-surface itself publishes for f43
-    # only; its iptsd links libspdlog.so.1.15, which 45 and later no longer
-    # ship -- and one source for every branch beats two.
-    #
-    # libwacom is upgraded below inside the same COPR window. linux-surface's
-    # own published libwacom-surface (2.17) is uninstallable here -- symbol
-    # versions older than libinput requires, an unversioned -data provides --
-    # and stock libwacom cannot express the Surface entries at all: it
-    # rejects their virt|/mei| DeviceMatch and never maps BUS_VIRTUAL
-    # devices, so iptsd's pen devices stay unmatched and GNOME loses
-    # pen-display metadata past the Surface Go. So the COPR builds Fedora's
-    # own libwacom spec with the linux-surface patches on top
-    # (pocketblue-packages surface/libwacom) and it version-wins over stock,
-    # the same way the kernel does.
-    #
-    # Secure Boot: the COPR signs the kernel image with Red Hat's test keys,
-    # which shim does not trust, so it is re-signed below with our own MOK
-    # key when the build has it. Users enroll the certificate once with
-    # `ujust enroll-secureboot-key`.
-
-    # Remove the stock kernel first: the COPR build replaces it under the
-    # same package names, and the image must ship exactly one kernel.
-    # Tolerate packages the base does not ship; under `set -e` an
-    # unconditional erase of a missing package aborts the build.
-    for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
-        if rpm -q "$pkg" >/dev/null 2>&1; then
-            rpm --erase "$pkg" --nodeps
-        fi
-    done
-
-    # Configure surface kernel modules to load at boot
-    tee /usr/lib/modules-load.d/ublue-surface.conf << EOF
-# Only on AMD models
-pinctrl_amd
-
-# Surface Book 2
-pinctrl_sunrisepoint
-
-# For Surface Pro 7/Laptop 3/Book 3
-pinctrl_icelake
-
-# For Surface Pro 7+/Pro 8/Laptop 4/Laptop Studio
-pinctrl_tigerlake
-
-# For Surface Pro 9/Laptop 5
-pinctrl_alderlake
-
-# For Surface Pro 10/Laptop 6
-pinctrl_meteorlake
-
-# Only on Intel models
-intel_lpss
-intel_lpss_pci
-
-# Add modules necessary for Disk Encryption via keyboard
-surface_aggregator
-surface_aggregator_registry
-surface_aggregator_hub
-surface_hid_core
-8250_dw
-
-# Surface Pro 7/Laptop 3/Book 3 and later
-surface_hid
-surface_kbd
-
-EOF
-
-    # Install Kernel + touch daemon. Enable/install/disable so the COPR is not
-    # left active in the shipped image; enabled alongside Fedora's repos rather
-    # than --repo, which would hide iptsd's Fedora dependencies (cairomm, ...)
-    # from the resolver. The kernel is installed at the EXACT EVR the
-    # kernel-builder stage resolved and recorded -- never "the newest":
-    # on a rawhide-content base a mainline rc (7.3-rc0) overtakes the
-    # surface rebase (7.2.x), and newest-wins would quietly ship the stock
-    # kernel with a module built for another one. libwacom gets the same
-    # exact-EVR treatment from the same COPR.
-    dnf -y copr enable @mobility/surface
-    kevr="$(cat /kernel-out/kver)"
-    kevr="${kevr%.*}"
-    dnf -y install --setopt=disable_excludes=* \
-        "kernel-${kevr}" \
-        "kernel-core-${kevr}" \
-        "kernel-modules-${kevr}" \
-        "kernel-modules-core-${kevr}" \
-        "kernel-modules-extra-${kevr}" \
-        iptsd
-    wacom_evr="$(dnf -q repoquery --qf '%{VERSION}-%{RELEASE}\n' \
-        --disablerepo='*' \
-        --enablerepo='copr:copr.fedorainfracloud.org:group_mobility:surface' \
-        libwacom | sort -V | tail -1)"
-    if [[ -z "${wacom_evr}" ]]; then
-        echo "the @mobility/surface COPR has no libwacom for this branch" >&2
-        exit 1
-    fi
-    # allow_vendor_change: replacing Fedora's libwacom with the COPR build
-    # IS a vendor change, which newer dnf5 blocks by default -- silently for
-    # `upgrade` ("Nothing to do"), loudly for install. The kernel above only
-    # sidesteps this because the stock one is erased first.
-    dnf -y install --setopt=allow_vendor_change=true \
-        "libwacom-${wacom_evr}" "libwacom-data-${wacom_evr}"
-    dnf -y copr disable @mobility/surface
-
-    # Fail loudly if stock won the libwacom version race (Fedora bumped it
-    # and the COPR has not rebuilt yet) rather than quietly ship a surface
-    # image without pen metadata.
-    rpm -q libwacom --qf '%{RELEASE}' | grep -q '\.surface'
-
-    # Pin what we just chose: without the lock, anything resolving kernel
-    # afterwards could pull Fedora's build back in over the COPR's.
-    dnf versionlock add kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
-
-    # Regenerate initramfs. Exactly one kernel is installed now, so its EVR
-    # is THE kernel version.
-    QUALIFIED_KERNEL="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')"
-
-    # The kernel-builder stage resolved its kernel from the same COPR,
-    # independently. If it saw a different EVR (a COPR publish landing
-    # mid-build), its module and signed vmlinuz target a kernel this image
-    # does not ship -- fail now, before dracut spends a minute on it.
-    if [[ "${QUALIFIED_KERNEL}" != "$(cat /kernel-out/kver)" ]]; then
-        echo "kernel-builder built for $(cat /kernel-out/kver) but this image ships ${QUALIFIED_KERNEL}; rerun the build" >&2
-        exit 1
-    fi
-
-    export DRACUT_NO_XATTR=1
-    /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
-    chmod 0600 "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
-
-    # Secure Boot. The COPR signs vmlinuz with Red Hat's TEST keys, which
-    # shim rejects, so the kernel-builder stage re-signed it with our MOK key
-    # -- when the build had the key; the private key is only ever mounted
-    # into that throwaway stage (see build_files/kernel-builder.sh, which
-    # also explains why vmlinuz is the only file that needs this). Here the
-    # signed image just replaces the packaged one. The enrolment candidate
-    # ships as /usr/lib/pki/bluespin-secureboot.der, and the ujust recipe
-    # wraps `mokutil --import` for it. Without the key the builder stage
-    # already warned; nothing to do here.
-    if [[ -f /kernel-out/vmlinuz ]]; then
-        install -m0755 /kernel-out/vmlinuz "/usr/lib/modules/${QUALIFIED_KERNEL}/vmlinuz"
-    fi
-
-fi
-
 ############################################################################
-# 7. Kernel modules -- built and signed in the Containerfile's
-#    kernel-builder stage (build_files/kernel-builder.sh), so no toolchain
-#    or kernel-devel ever enters this image; here the artifacts are only
-#    installed. After the variant layers, because the surface leg decides
-#    its kernel there. (The FP5 platform, when it lands, skips this: a phone
-#    kernel needs no virtual camera.)
+# 7. The v4l2loopback module for the stock kernel, from the stock flavor of
+#    the kernel-builder stage -- built and signed there, only installed
+#    here (see build_files/kernel-builder.sh and kmod.sh). The surface
+#    layer installs its own build for its own kernel; the FP5 platform,
+#    when it lands, skips this entirely.
 ############################################################################
 
-kver="$(cat /kernel-out/kver)"
-# The module dir exists iff the builder's kernel is this image's kernel:
-# guaranteed on the vanilla platforms (both stages FROM the same base),
-# asserted above for surface. This catches anything else.
-if [[ ! -d "/usr/lib/modules/${kver}" ]]; then
-    echo "kernel-builder built for ${kver}, which this image does not ship" >&2
-    exit 1
-fi
-install -Dm0644 /kernel-out/v4l2loopback.ko.xz \
-    "/usr/lib/modules/${kver}/extra/v4l2loopback/v4l2loopback.ko.xz"
-depmod -a "${kver}"
-
-# Load at boot, with the label OBS users expect -- the same configuration
-# the Bluefin base shipped
-install -Dm0644 /ctx/files/usr/lib/modules-load.d/v4l2loopback.conf \
-    /usr/lib/modules-load.d/v4l2loopback.conf
-install -Dm0644 /ctx/files/usr/lib/modprobe.d/98-v4l2loopback.conf \
-    /usr/lib/modprobe.d/98-v4l2loopback.conf
+install_v4l2loopback_artifacts
 
 ############################################################################
 # 8. Report what this image was built against, so the build log answers the
