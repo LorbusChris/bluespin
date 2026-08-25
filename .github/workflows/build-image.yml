@@ -33,6 +33,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
@@ -118,6 +119,51 @@ jobs:
           just rechunk \
             "${IMAGE_NAME}" \
             "${FEDORA_BRANCH}"
+
+      # SBOM and vulnerability report for the image that ships, with the very
+      # syft and grype the dx image offers as podman functions -- the digest
+      # pins in files/etc/profile.d/97-bluespin-container-clis.sh are the one
+      # Renovate-tracked source for both. Report-only by design: a distro
+      # image always carries open RPM CVEs, so a gate would simply stay red.
+      - name: SBOM and vulnerability scan
+        id: sbom
+        run: |
+          set -euo pipefail
+          syft_image="$(sed -n 's/^SYFT_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
+          grype_image="$(sed -n 's/^GRYPE_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
+          podman save --format oci-archive -o /tmp/image.oci "${IMAGE_NAME}:${FEDORA_BRANCH}"
+          podman run --rm -v /tmp/image.oci:/image.oci:ro "${syft_image}" \
+            scan oci-archive:/image.oci -o spdx-json > sbom.spdx.json
+          podman run --rm -v "${PWD}/sbom.spdx.json:/sbom.json:ro" "${grype_image}" \
+            sbom:/sbom.json -o json > grype.json
+          podman run --rm -v "${PWD}/sbom.spdx.json:/sbom.json:ro" "${grype_image}" \
+            sbom:/sbom.json -o sarif > grype.sarif
+          rm -f /tmp/image.oci
+          {
+            echo "### Vulnerabilities: ${IMAGE_NAME}:${FEDORA_BRANCH}"
+            echo ""
+            echo "| Severity | Count |"
+            echo "| --- | --- |"
+            jq -r '[.matches[].vulnerability.severity] | group_by(.) | map({(.[0]): length}) | add // {} | to_entries[] | "| \(.key) | \(.value) |"' grype.json
+            echo ""
+            echo "$(jq '[.matches[] | select(.vulnerability.fix.state == "fixed")] | length' grype.json) with a fix available upstream."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: sbom-${{ inputs.platform }}-${{ inputs.fedora_branch }}
+          path: sbom.spdx.json
+
+      # Into the repository's code-scanning view, one category per leg.
+      # Push events only: fork PRs lack the permission, and main is the
+      # state worth tracking.
+      - name: Upload vulnerability report to code scanning
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: github/codeql-action/upload-sarif@df559355d593797519d70b90fc8edd5db049e7a2 # v4
+        with:
+          sarif_file: grype.sarif
+          category: grype-${{ inputs.platform }}-${{ inputs.fedora_branch }}
 
       # What every installed extension declares against the shell this image
       # ships. This is the visibility mechanism for installed-but-disabled
@@ -232,3 +278,19 @@ jobs:
           DIGEST: ${{ steps.push-image.outputs.digest }}
         run: |
           cosign sign -y --new-bundle-format=false --use-signing-config=false ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+
+      # The SBOM travels with the image: attached to the digest as an
+      # attestation, keyed (what policy could one day verify) and keyless
+      # (workflow identity), same dual story as the signatures.
+      - name: Attest SBOM
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          cosign attest -y --key env://COSIGN_PRIVATE_KEY \
+            --predicate sbom.spdx.json --type spdxjson \
+            ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+          cosign attest -y \
+            --predicate sbom.spdx.json --type spdxjson \
+            ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}

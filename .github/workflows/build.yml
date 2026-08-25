@@ -52,6 +52,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
     uses: ./.github/workflows/build-image.yml
     with:
       platform: bluespin
@@ -83,6 +84,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
     uses: ./.github/workflows/build-image.yml
     with:
       platform: ${{ matrix.platform }}
