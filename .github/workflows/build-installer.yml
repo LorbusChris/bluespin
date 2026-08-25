@@ -179,11 +179,25 @@ jobs:
     permissions:
       contents: read
       actions: read
+      statuses: write
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan-pr.outputs.legs) }}
     steps:
+      # workflow_run runs never appear on the pull request's checks;
+      # a commit status on the head SHA does, and links here
+      - name: Report building (commit status)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state=pending -f context="${CONTEXT}" \
+            -f target_url="${RUN_URL}" -f description="building"
+
       # For the local acquire-image action
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -228,3 +242,26 @@ jobs:
             ${{ steps.build.outputs.iso-dest }}-CHECKSUM
           compression-level: 0
           retention-days: 7
+
+      - name: Report built (commit status)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state=success -f context="${CONTEXT}" \
+            -f target_url="${RUN_URL}" -f description="installer ISO in this run's artifacts"
+
+      - name: Report failed (commit status)
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONTEXT: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, iso)
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state=failure -f context="${CONTEXT}" \
+            -f target_url="${RUN_URL}" -f description="failed"

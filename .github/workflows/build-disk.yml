@@ -159,11 +159,25 @@ jobs:
     permissions:
       contents: read
       actions: read
+      statuses: write
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan-pr.outputs.legs) }}
     steps:
+      # workflow_run runs never appear on the pull request's checks;
+      # a commit status on the head SHA does, and links here
+      - name: Report building (commit status)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONTEXT: bluespin-fp5 (${{ matrix.fedora_branch }}, disk)
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state=pending -f context="${CONTEXT}" \
+            -f target_url="${RUN_URL}" -f description="building"
+
       # For tools/, devices/ and the composite action
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -201,3 +215,26 @@ jobs:
         with:
           image-ref: ${{ steps.load.outputs.ref }}
           artifact-suffix: pr-${{ needs.plan-pr.outputs.pr }}
+
+      - name: Report built (commit status)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONTEXT: bluespin-fp5 (${{ matrix.fedora_branch }}, disk)
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state=success -f context="${CONTEXT}" \
+            -f target_url="${RUN_URL}" -f description="flashable image in this run's artifacts"
+
+      - name: Report failed (commit status)
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONTEXT: bluespin-fp5 (${{ matrix.fedora_branch }}, disk)
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${SHA}" \
+            -f state=failure -f context="${CONTEXT}" \
+            -f target_url="${RUN_URL}" -f description="failed"
