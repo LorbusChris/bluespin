@@ -1,0 +1,203 @@
+---
+# Flashable disk images for the Fairphone 5, built from a published
+# bluespin-fp5 container.
+#
+# Install media are release moments: the daily builds publish only the OCI
+# images existing devices update from, and this ~10 GiB job runs when a
+# GitHub release is published -- the artifact lands on that release -- or
+# by hand. One f45 release builds the first flashable image; every build
+# after it is an update, not an installation. Pull requests do not come
+# through here: a PR has no published tag to pull.
+name: Build Bluespin FP5 disk image
+# workflow_call deliberately absent until something actually calls this --
+# a dead trigger is a second copy of the input schema to keep in sync and an
+# invitation to assume automation exists. Add it in the same PR as the first
+# caller.
+on:
+  release:
+    types:
+      - published
+  # A pull-request *-disk label: the build workflow shares the fp5
+  # leg's image as an artifact, and this fires when that run completes
+  # to build the flashable image from it
+  workflow_run:
+    workflows:
+      - Build Bluespin container image
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'bluespin-fp5 tag to build from'
+        type: string
+        required: true
+        default: '45'
+      release_id:
+        description: 'optional release to upload the archive to'
+        type: string
+        required: false
+
+env:
+  IMAGE_NAME: bluespin-fp5
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  disk:
+    name: Build FP5 disk image
+    if: ${{ github.event_name != 'workflow_run' }}
+    # 24.04, NOT 26.04. pocketblue moved every job to 26.04-arm and then moved
+    # the disk-image job specifically back (pocketblue d729297); the container
+    # jobs stayed. Do not rediscover that.
+    runs-on: ubuntu-24.04-arm
+
+    permissions:
+      # write, not read: the optional release-asset upload at the end attaches
+      # the archive to a release, which needs it -- with read the whole job
+      # succeeds and then 403s on the final step.
+      contents: write
+
+    steps:
+      # No submodules: this job never builds the container, it pulls one.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Peak disk here is the pulled image plus disk.raw plus the split rootfs.
+      # Most of what this removes is x86-only toolchain absent on an arm runner.
+      - name: Maximize build space
+        continue-on-error: true
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          extra-squeeze: true
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      # The input goes through env, not ${{ }} interpolation inside the
+      # script: a crafted tag would otherwise inject shell into the run block.
+      # The heredoc write keeps a newline-carrying value contained to one
+      # output instead of appending extra name=value lines to GITHUB_OUTPUT.
+      - name: Resolve the image reference
+        id: ref
+        env:
+          # Empty on release events (inputs exist only for dispatch); the
+          # fp5 image has exactly one branch, so the fallback is not a guess
+          TAG: ${{ inputs.tag || '45' }}
+        run: |
+          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
+          {
+            echo "image_ref<<__EOV__"
+            echo "${IMAGE_REGISTRY,,}/${IMAGE_NAME}:${TAG}"
+            echo "__EOV__"
+          } >> "${GITHUB_OUTPUT}"
+
+      # Must be sudo: image-builder resolves the ref from root's container
+      # storage. A rootless pull puts the image where it cannot be seen.
+      - name: Pull the container image
+        env:
+          DISK_IMAGE_REF: ${{ steps.ref.outputs.image_ref }}
+        run: sudo podman pull "${DISK_IMAGE_REF}"
+
+      - name: Build, verify and archive the disk image
+        uses: ./.github/actions/fp5-disk-image
+        with:
+          image-ref: ${{ steps.ref.outputs.image_ref }}
+          artifact-suffix: ${{ inputs.tag }}
+
+      - name: Upload release artifact
+        # A release event names its own release; a dispatch can name one
+        if: ${{ inputs.release_id || github.event_name == 'release' }}
+        uses: svenstaro/upload-release-action@81c65b7cd4de9b2570615ce3aad67a41de5b1a13 # v2.11.2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          release_id: ${{ inputs.release_id || github.event.release.id }}
+          file: ${{ env.IMAGE_NAME }}-${{ inputs.tag }}.7z
+
+  # The pull-request path: read the completed build run's plan and build
+  # the flashable image from the fp5 leg's shared artifact. Loaded with
+  # sudo, straight into the root storage image-builder resolves from.
+  plan-pr:
+    name: plan (pr)
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      legs: ${{ steps.map.outputs.legs }}
+      pr: ${{ steps.map.outputs.pr }}
+    steps:
+      - name: Download the build run's plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plan
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Map disk flags to legs
+        id: map
+        run: |
+          set -euo pipefail
+          legs='[]'
+          for key in $(jq -r '.fp5_disk[]' plan.json); do
+            branch="${key%-*}"
+            legs="$(jq -c ". + [{\"fedora_branch\":\"${branch}\"}]" <<< "${legs}")"
+          done
+          {
+            echo "legs=${legs}"
+            echo "pr=$(jq -r .pr plan.json)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  pr-disk:
+    name: bluespin-fp5 (${{ matrix.fedora_branch }}, disk)
+    needs: plan-pr
+    if: ${{ needs.plan-pr.outputs.legs != '[]' }}
+    # 24.04, NOT 26.04 -- see the note on the disk job above
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan-pr.outputs.legs) }}
+    steps:
+      # For tools/, devices/ and the composite action
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Maximize build space
+        continue-on-error: true
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          extra-squeeze: true
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Fetch the fp5 leg's image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image-bluespin-fp5-${{ matrix.fedora_branch }}
+          path: /tmp/fp5-image
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # Not the acquire-image action: image-builder resolves the ref
+      # from ROOT's container storage, so the load must be sudo
+      - name: Load the image into root storage
+        id: load
+        run: |
+          set -euo pipefail
+          ref="$(sudo podman load -q -i /tmp/fp5-image/shared-image.oci | sed -n 's/^Loaded image[^:]*: //p' | head -1)"
+          rm -rf /tmp/fp5-image
+          [[ -n "${ref}" ]] || { echo "::error::podman load reported no image"; exit 1; }
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Build, verify and archive the disk image
+        uses: ./.github/actions/fp5-disk-image
+        with:
+          image-ref: ${{ steps.load.outputs.ref }}
+          artifact-suffix: pr-${{ needs.plan-pr.outputs.pr }}

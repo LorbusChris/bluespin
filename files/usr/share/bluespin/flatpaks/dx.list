@@ -6,7 +6,7 @@
 # Validated against Flathub by .github/workflows/validate-flatpaks.yml.
 #
 # One app id per line; blank lines and # comments are ignored.
-# bluespin-arches: x86_64
+# bluespin-arches: x86_64 aarch64
 app.drey.Biblioteca
 app.drey.Elastic
 ca.desrt.dconf-editor

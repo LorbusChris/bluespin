@@ -1,0 +1,81 @@
+---
+# The flashable-disk pipeline for the Fairphone 5, from a bluespin-fp5
+# container that is already in root's container storage.
+#
+# Shared by build-disk.yml's two paths, which get the container
+# there differently: the release/dispatch job pulls a published tag, and
+# the pull-request job loads the fp5 leg's shared-image artifact.
+# Everything after that point is identical, so it lives here once. The
+# caller must have installed just.
+name: Build FP5 disk image
+description: >-
+  Build, post-process, verify and archive the flashable Fairphone 5 disk
+  image from a bluespin-fp5 container in root's container storage, and
+  upload the archive as a workflow artifact.
+
+inputs:
+  image-ref:
+    description: >-
+      Container reference for image-builder to resolve from root's storage,
+      e.g. ghcr.io/owner/bluespin-fp5:rawhide or localhost/bluespin-fp5:rawhide
+    required: true
+  image-name:
+    description: Image name, used for the archive and artifact names
+    required: false
+    default: bluespin-fp5
+  artifact-suffix:
+    description: Suffix for the archive and artifact name, e.g. a tag or pr-57
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Must be sudo: `just disk` bind-mounts /var/lib/containers/storage, which
+    # is root's, and that is where image-builder looks for the ref.
+    - name: Build disk image
+      shell: bash
+      env:
+        DISK_IMAGE_REF: ${{ inputs.image-ref }}
+      run: sudo --preserve-env=PATH,DISK_IMAGE_REF "$(which just)" disk
+
+    # Reclaim before the postprocess/archive steps; the split rootfs and the
+    # archive still have to fit. Nothing needs any container image from here
+    # on, so remove them all -- a plain prune would skip the tagged
+    # image-builder image, the largest thing left.
+    - name: Reclaim space
+      shell: bash
+      run: sudo podman rmi --all --force || true
+
+    - name: Post-process
+      shell: bash
+      run: |
+        sudo --preserve-env=PATH "$(which just)" postprocess
+        sudo chown -R "$(id -u):$(id -g)" output/
+
+    # The contracts that decide whether this flashes at all (exact ESP size,
+    # this device's DTB present on it) live in the device's device.conf and
+    # tools/postprocess/verify-images.sh, so the identical check runs in a
+    # local bring-up flow -- not just here.
+    - name: Verify the images
+      shell: bash
+      run: sudo --preserve-env=PATH "$(which just)" verify-images
+
+    - name: Collect artifacts
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ inputs.image-name }}
+        SUFFIX: ${{ inputs.artifact-suffix }}
+      run: |
+        # The sudo runs above leave root-owned temp scripts here, which the
+        # unprivileged just below cannot write (pocketblue 36e77ba).
+        sudo rm -rf "/run/user/$(id -u)/just"
+        just artifacts
+        mv "${IMAGE_NAME}.7z" "${IMAGE_NAME}-${SUFFIX}.7z"
+        ls -l out/images/
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: ${{ inputs.image-name }}-${{ inputs.artifact-suffix }}
+        path: ${{ inputs.image-name }}-${{ inputs.artifact-suffix }}.7z
+        compression-level: 0

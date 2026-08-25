@@ -11,9 +11,10 @@ ones live in [docs/desktop-defaults.md](docs/desktop-defaults.md).
 
 | Image | Purpose |
 | --- | --- |
-| `ghcr.io/lorbuschris/bluespin` | Fedora Silverblue plus full multimedia, curated GNOME apps, shell extensions and desktop defaults |
+| `ghcr.io/lorbuschris/bluespin` | Fedora Silverblue plus full multimedia, curated GNOME apps, shell extensions and desktop defaults. The branched-release tags and `latest` are multi-arch manifests: x86, and a generic aarch64 UEFI image that is not device-specific |
 | `ghcr.io/lorbuschris/bluespin-dx` | Adds the developer layer ([dx.sh](build_files/dx.sh)): virtualisation, containers, tracing and packaging tools |
 | `ghcr.io/lorbuschris/bluespin-surface` | Replaces the kernel with a [linux-surface](https://github.com/linux-surface/linux-surface)-patched kernel + `iptsd`, built in our [@mobility/surface](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/) COPR, for Microsoft Surface devices |
+| `ghcr.io/lorbuschris/bluespin-fp5` | The phone (aarch64): the [pocketblue](https://github.com/pocketblue/pocketblue) device layer for the Fairphone 5, the [@mobility/gnome-mobile](https://copr.fedorainfracloud.org/coprs/g/mobility/gnome-mobile/) shell and the [@mobility/sc7280](https://copr.fedorainfracloud.org/coprs/g/mobility/sc7280/) kernel, plus telephony ([fp5.sh](build_files/fp5.sh)) -- the device layer on the generic aarch64 bluespin image |
 
 Each platform is built per Fedora branch, and the branch is the tag:
 `bluespin:44`, `bluespin-dx:rawhide`. `latest` is an alias for the default
@@ -21,6 +22,23 @@ branch (44). Every branch builds on Fedora's own Silverblue; which branches
 CI builds is the matrix in [build.yml](.github/workflows/build.yml), and the
 rawhide legs exist to find out what breaks on the next GNOME before it
 ships.
+
+Pull requests build nothing by default: CI legs are opted in per PR with
+labels following the grammar
+
+```
+ci[-variant][-arm][-rawhide][-installer|-disk]
+```
+
+pick a platform (`ci`, `ci-dx`, `ci-surface`, `ci-arm`, `ci-fp5` -- the
+phone is arm by nature), pick a branch (stable by default -- 44 on x86,
+45 on arm -- or the `-rawhide` form), and optionally ask for the leg's
+install medium (`-installer` for a live ISO, `-disk` for the phone's
+flashable image). Every flag implies exactly the legs it needs --
+`ci-fp5-rawhide-disk` alone builds the rawhide arm bluespin, the rawhide
+phone on top of it, and the flashable artifact. Attaching a label starts
+the widened run immediately. The full table lives in
+[build.yml](.github/workflows/build.yml)'s header.
 
 ## What the images carry
 
@@ -84,6 +102,15 @@ Images built without the signing key (a fork's pull request, a local
 surface kernel with its COPR test-key signature; both say so in the build
 log, and both work with Secure Boot disabled.
 
+## Installing
+
+Install media live on [GitHub releases](https://github.com/LorbusChris/bluespin/releases):
+publishing a release builds the live installer ISOs (x86, and the
+generic aarch64 image's installer) and the Fairphone 5 flashable disk
+image, and attaches them there. The daily builds publish only the OCI
+images below -- existing installs update from those; nobody reinstalls
+to update.
+
 ## Switching to bluespin
 
 From an existing bootc/atomic Fedora system:
@@ -101,17 +128,25 @@ signature-verified on-device. To verify manually:
 cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 ```
 
-Every published digest additionally carries a **keyless** signature bound to
-the build workflow's OIDC identity (Fulcio certificate, logged in Rekor).
-The identity is the *reusable* workflow that actually signs --
-`build-image.yml`, not the `build.yml` caller -- because that is how
-GitHub mints OIDC tokens for reusable workflows. On-device verification
-keeps enforcing the key; the keyless signature exists so a later switch is
-a policy change rather than a re-signing campaign. To verify it:
+Every floating bluespin tag -- `44`, `45`, `rawhide`, `latest` and
+their dated aliases -- serves a manifest index, multi-arch (x86_64 +
+aarch64) on the branched releases. The per-arch images and the index
+over them are each cosign-signed -- verification holds whether a client
+resolves the index or an instance -- and `bootc switch` on an aarch64
+UEFI machine simply gets the arm image.
+
+Every published digest additionally carries a **keyless** signature bound
+to the OIDC identity of the workflow that actually signs -- that is
+[sign.yml](.github/workflows/sign.yml), the dedicated signing workflow
+(GitHub mints the token for the workflow file running the job; digests
+published before the pipeline split carry earlier identities such as
+`build-image.yml`). On-device verification keeps enforcing the key; the
+keyless signature exists so a later switch is a policy change rather than
+a re-signing campaign. To verify it:
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/build-image\.yml@.*' \
+  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/sign\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/lorbuschris/bluespin:latest
 ```
@@ -182,9 +217,10 @@ in [extensions.sh](build_files/extensions.sh), rendered into
 
 | Enabled on | Extensions |
 | --- | --- |
-| every platform | AppIndicator, Bazaar Companion, Caffeine, Gradia Capture, Network Displays, Search Light |
-| `bluespin`, `bluespin-dx`, `bluespin-surface` | Weather or Not |
+| every platform | AppIndicator, Bazaar Companion, Caffeine, Gradia Capture, Network Displays |
+| `bluespin`, `bluespin-dx`, `bluespin-surface` | Search Light, Weather or Not (both need a keyboard or a landscape bar the phone lacks) |
 | `bluespin-dx` | System Monitor, Mosaic WM |
+| `bluespin-fp5` | NekoTorch (the one device with a torch LED) |
 
 Screen Rotate ships installed on every platform but is enabled nowhere for
 now: Fedora's RPM does not yet declare GNOME 51, and an enabled extension
@@ -262,6 +298,7 @@ Requires `just` and `podman`.
 ```bash
 just build bluespin              # the default branch; or bluespin-dx / bluespin-surface
 just build bluespin-dx rawhide   # any platform on any branch in bluespin.env
+just build bluespin-fp5 45 arm64 # the phone; cross-builds via qemu-user-static
 NO_CACHE=1 just build bluespin   # force a full rebuild (see the caveat below)
 just rechunk bluespin 44         # optional: split into update-friendly layers
 ```
@@ -272,6 +309,7 @@ layered family selected by `--target`:
 ```
 base (Silverblue) → bluespin → dx
                              → surface
+                             → fp5 (aarch64)
 ```
 
 [build.sh](build_files/build.sh) builds the **bluespin** layer — everything
@@ -279,9 +317,13 @@ the platforms share, with
 [silverblue_base.sh](build_files/silverblue_base.sh) supplying what a plain
 Silverblue base lacks (the updater, ujust, Flathub and the preinstall
 service, the multimedia stack). The variants are thin deltas on top:
-[dx.sh](build_files/dx.sh) or [surface.sh](build_files/surface.sh), then a
+[dx.sh](build_files/dx.sh), [surface.sh](build_files/surface.sh) or
+[fp5.sh](build_files/fp5.sh), then a
 shared [variant-finish.sh](build_files/variant-finish.sh) that stamps the
-variant's identity and per-platform desktop/extension set. Two throwaway
+variant's identity and per-platform desktop/extension set. The fp5 layer
+works because the `bluespin.env` base pins are multi-arch OCI indexes: the
+same pinned digest resolves to aarch64, so the phone builds the very same
+bluespin stage on its architecture. Two throwaway
 **kernel-builder** flavors (stock and surface) do everything that must
 install tooling in order to build something — gcc and kernel-devel for the
 v4l2loopback module, sbsigntools for the surface vmlinuz — and are the only
@@ -295,7 +337,7 @@ and publishes the bluespin image first and the variant jobs then build
 `FROM` that published digest (`BLUESPIN_IMAGE`), so dx and surface never
 rebuild the bluespin content
 (see [`build.yml`](.github/workflows/build.yml) calling
-[`build-image.yml`](.github/workflows/build-image.yml)). Every published
+[`build-oci.yml`](.github/workflows/build-oci.yml)). Every published
 image is then rechunked with [chunkah](https://github.com/coreos/chunkah),
 so a client update downloads only the chunks whose packages changed. CI
 builds the matrix daily and on every push to `main`.
@@ -333,6 +375,6 @@ all come from Flathub, validated in CI.
 Live installer ISOs are built with
 [Titanoboa](https://github.com/ublue-os/titanoboa) directly from the
 published images — the same mechanism Bluefin and Bazzite use. Trigger the
-[`Build Bluespin ISOs`](.github/workflows/build-iso.yml) workflow from the
+[`Build Bluespin ISOs`](.github/workflows/build-installer.yml) workflow from the
 Actions tab; it produces one ISO per variant (with checksums) as workflow
 artifacts.

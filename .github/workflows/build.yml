@@ -4,10 +4,53 @@
 # nightly, rawhide included as the early-warning leg -- then the variant
 # jobs build bluespin-dx and bluespin-surface on the branched releases
 # FROM that published image, so a variant build on main never rebuilds
-# the bluespin content. On pull requests nothing is published, every leg
-# builds self-contained from the Containerfile's own stages (no
-# ordering), and only the branched releases build: a rawhide leg red for
-# rawhide reasons would just block unrelated merges.
+# the bluespin content. Every floating bluespin tag -- 44, 45, rawhide,
+# latest, the dated aliases -- serves a manifest index, multi-arch on
+# the branched releases; the aarch64 half is the generic UEFI image the
+# fp5 device layer builds FROM, exactly as dx and surface build FROM the
+# amd64 instance.
+#
+# Pull requests build NOTHING by default and publish never; ci labels
+# opt legs in, and every leg is self-contained from the Containerfile's
+# own stages. The grammar is
+#
+#   ci[-variant][-arm][-rawhide][-installer|-disk]
+#
+# pick a platform, pick a branch, optionally ask for its install medium
+# -- and every flag implies exactly the legs it needs. Fedora stable
+# differs by architecture -- 44 on x86, 45 on arm -- and the full
+# expansion follows:
+#
+#   ci                  bluespin, stable x86        (44, amd64)
+#   ci-dx               + bluespin-dx               (44, amd64), implies ci
+#   ci-surface          + bluespin-surface          (44, amd64), implies ci
+#   ci-arm              bluespin, stable arm        (45, arm64)
+#   ci-fp5              + bluespin-fp5              (45, arm64), implies ci-arm
+#   *-rawhide           the same legs on rawhide (ci-rawhide,
+#                       ci-dx-rawhide, ci-surface-rawhide, ci-arm-rawhide,
+#                       ci-fp5-rawhide), same implications per branch
+#   *-installer         a live installer ISO from the very image the leg
+#                       builds: ci-installer, ci-arm-installer,
+#                       ci-dx-installer, ci-surface-installer, and their
+#                       -rawhide forms -- each implies its leg's flag;
+#                       build-installer.yml fires when this run completes
+#                       builds the ISO from the leg's shared image
+#   *-disk              the flashable fp5 disk image -- the phone's
+#                       installer substitute: ci-fp5-disk and
+#                       ci-fp5-rawhide-disk, same shape, built by
+#                       build-disk.yml when this run completes
+#
+# Every pull-request leg shares its built image as a one-day workflow
+# artifact, and the plan publishes its leg lists as a `plan` artifact:
+# dependent legs inherit their base from it, and every follow-on
+# workflow -- signing, scanning, attestation, the GNOME report, the
+# media builds -- consumes those instead of rebuilding or re-deriving
+# anything. This workflow builds and publishes; one concern per file
+# for everything after.
+#
+# The plan job turns event + labels into the leg lists; attaching a
+# label starts the widened run immediately (pull_request runs on
+# labeled too), removing one shapes the next run.
 #
 # The branch is the image tag -- bluespin:44, bluespin-dx:rawhide -- and the
 # default branch (DEFAULT_FEDORA_BRANCH in bluespin.env) also carries
@@ -19,6 +62,11 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   schedule:
     - cron: '05 07 * * *'  # 07:05am UTC everyday
   push:
@@ -34,71 +82,476 @@ on:
         required: false
         default: '["44", "45", "rawhide"]'
 
+# A labeled run adds legs to what already ran for this SHA -- it must
+# not cancel the run it is extending (the plan job reuses those legs),
+# so it gets a group of its own; every other event supersedes prior
+# runs on the ref as before. The cost: a new push does not cancel a
+# still-running labeled run of the old SHA -- it finishes and its
+# checks simply belong to the outdated commit.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.run_id || github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
+  # Event + labels -> the leg lists every build job consumes. One
+  # always-on job so an unlabeled pull request shows this single line
+  # (and cleanly skipped build jobs) rather than a wall of legs.
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    permissions:
+      # To list this SHA's other runs and their jobs on labeled events
+      actions: read
+    outputs:
+      bluespin: ${{ steps.plan.outputs.bluespin }}
+      dx: ${{ steps.plan.outputs.dx }}
+      surface: ${{ steps.plan.outputs.surface }}
+      fp5: ${{ steps.plan.outputs.fp5 }}
+      bluespin_installer: ${{ steps.plan.outputs.bluespin_installer }}
+      dx_installer: ${{ steps.plan.outputs.dx_installer }}
+      surface_installer: ${{ steps.plan.outputs.surface_installer }}
+      fp5_disk: ${{ steps.plan.outputs.fp5_disk }}
+      base_runs: ${{ steps.plan.outputs.base_runs }}
+    steps:
+      - name: Plan the legs
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          DISPATCH_BRANCHES: ${{ inputs.fedora_branches }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bluespin='[]'; dx='[]'; surface='[]'; fp5='[]'
+          bluespin_installer='[]'; dx_installer='[]'
+          surface_installer='[]'; fp5_disk='[]'
+          base_runs='{}'
+
+          add() { # add <list-var> <json-object>
+            local -n list=$1
+            list="$(jq -c ". + [$2]" <<< "${list}")"
+          }
+
+          if [[ "${EVENT}" == "pull_request" ]]; then
+            has() { jq -e --arg l "$1" 'index($l)' <<< "${LABELS}" > /dev/null; }
+            declare -A want=()
+            for l in ci ci-rawhide ci-arm ci-arm-rawhide ci-dx ci-dx-rawhide \
+                     ci-surface ci-surface-rawhide ci-fp5 ci-fp5-rawhide \
+                     ci-installer ci-arm-installer ci-dx-installer \
+                     ci-surface-installer ci-fp5-disk \
+                     ci-rawhide-installer ci-arm-rawhide-installer \
+                     ci-dx-rawhide-installer ci-surface-rawhide-installer \
+                     ci-fp5-rawhide-disk; do
+              has "$l" && want[$l]=1 || true
+            done
+            # Implications: a media proof needs the leg that builds its
+            # image, and a variant needs its base layer's leg -- media
+            # first, so their implied legs cascade too
+            [[ -n "${want[ci-installer]:-}" ]] && want[ci]=1
+            [[ -n "${want[ci-arm-installer]:-}" ]] && want[ci-arm]=1
+            [[ -n "${want[ci-dx-installer]:-}" ]] && want[ci-dx]=1
+            [[ -n "${want[ci-surface-installer]:-}" ]] && want[ci-surface]=1
+            [[ -n "${want[ci-fp5-disk]:-}" ]] && want[ci-fp5]=1
+            [[ -n "${want[ci-rawhide-installer]:-}" ]] && want[ci-rawhide]=1
+            [[ -n "${want[ci-arm-rawhide-installer]:-}" ]] && want[ci-arm-rawhide]=1
+            [[ -n "${want[ci-dx-rawhide-installer]:-}" ]] && want[ci-dx-rawhide]=1
+            [[ -n "${want[ci-surface-rawhide-installer]:-}" ]] && want[ci-surface-rawhide]=1
+            [[ -n "${want[ci-fp5-rawhide-disk]:-}" ]] && want[ci-fp5-rawhide]=1
+            [[ -n "${want[ci-dx]:-}" ]] && want[ci]=1
+            [[ -n "${want[ci-surface]:-}" ]] && want[ci]=1
+            [[ -n "${want[ci-fp5]:-}" ]] && want[ci-arm]=1
+            [[ -n "${want[ci-dx-rawhide]:-}" ]] && want[ci-rawhide]=1
+            [[ -n "${want[ci-surface-rawhide]:-}" ]] && want[ci-rawhide]=1
+            [[ -n "${want[ci-fp5-rawhide]:-}" ]] && want[ci-arm-rawhide]=1
+            true
+
+            [[ -n "${want[ci]:-}" ]] && add bluespin '{"fedora_branch":"44","arch":"amd64"}'
+            [[ -n "${want[ci-rawhide]:-}" ]] && add bluespin '{"fedora_branch":"rawhide","arch":"amd64"}'
+            [[ -n "${want[ci-arm]:-}" ]] && add bluespin '{"fedora_branch":"45","arch":"arm64"}'
+            [[ -n "${want[ci-arm-rawhide]:-}" ]] && add bluespin '{"fedora_branch":"rawhide","arch":"arm64"}'
+            [[ -n "${want[ci-dx]:-}" ]] && add dx '{"fedora_branch":"44","arch":"amd64"}'
+            [[ -n "${want[ci-dx-rawhide]:-}" ]] && add dx '{"fedora_branch":"rawhide","arch":"amd64"}'
+            [[ -n "${want[ci-surface]:-}" ]] && add surface '{"fedora_branch":"44","arch":"amd64"}'
+            [[ -n "${want[ci-surface-rawhide]:-}" ]] && add surface '{"fedora_branch":"rawhide","arch":"amd64"}'
+            [[ -n "${want[ci-fp5]:-}" ]] && add fp5 '{"fedora_branch":"45","arch":"arm64"}'
+            [[ -n "${want[ci-fp5-rawhide]:-}" ]] && add fp5 '{"fedora_branch":"rawhide","arch":"arm64"}'
+            [[ -n "${want[ci-installer]:-}" ]] && add bluespin_installer '"44-amd64"'
+            [[ -n "${want[ci-arm-installer]:-}" ]] && add bluespin_installer '"45-arm64"'
+            [[ -n "${want[ci-dx-installer]:-}" ]] && add dx_installer '"44-amd64"'
+            [[ -n "${want[ci-surface-installer]:-}" ]] && add surface_installer '"44-amd64"'
+            [[ -n "${want[ci-fp5-disk]:-}" ]] && add fp5_disk '"45-arm64"'
+            [[ -n "${want[ci-rawhide-installer]:-}" ]] && add bluespin_installer '"rawhide-amd64"'
+            [[ -n "${want[ci-arm-rawhide-installer]:-}" ]] && add bluespin_installer '"rawhide-arm64"'
+            [[ -n "${want[ci-dx-rawhide-installer]:-}" ]] && add dx_installer '"rawhide-amd64"'
+            [[ -n "${want[ci-surface-rawhide-installer]:-}" ]] && add surface_installer '"rawhide-amd64"'
+            [[ -n "${want[ci-fp5-rawhide-disk]:-}" ]] && add fp5_disk '"rawhide-arm64"'
+            true
+
+            if [[ "${ACTION}" == "labeled" ]]; then
+              # A labeled run extends what already ran for this SHA
+              # rather than restarting it: collect the legs other runs
+              # already built (or are still building -- their checks
+              # land on the PR either way, honest red included) and drop
+              # them from this run. Media-flagged legs always run: the
+              # medium is built inside the leg, so a prior run without
+              # the flag proves the container but not the artifact.
+              coverage="$(
+                gh api "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=20" \
+                  -q ".workflow_runs[]
+                      | select(.id != ${RUN_ID})
+                      | select(.name == \"${WORKFLOW_NAME}\")
+                      | .id" \
+                | while read -r id; do
+                    gh api "repos/${REPO}/actions/runs/${id}/jobs?per_page=100" \
+                      -q ".jobs[]
+                          | select(.conclusion == \"success\" or .status == \"in_progress\" or .status == \"queued\")
+                          | select(.name | test(\" on \"))
+                          | [(.conclusion // .status), \"${id}\", (.name | split(\" / \")[0])]
+                          | @tsv"
+                  done | sort -u
+              )"
+              echo "coverage from other runs of ${HEAD_SHA}:"
+              echo "${coverage:-  nothing}"
+              declare -A done_run=()
+              while IFS=$'\t' read -r state id name; do
+                [[ "${state}" == "success" ]] && done_run["${name}"]="${id}"
+              done <<< "${coverage}"
+              is_covered() { grep -qF "$(printf '\t%s' "$1")" <<< "${coverage}"; }
+              filter() { # filter <legs-var> <job-id> <media-list-var>
+                local -n legs=$1 media=$3
+                local out='[]' entry branch arch
+                while read -r entry; do
+                  branch="$(jq -r .fedora_branch <<< "${entry}")"
+                  arch="$(jq -r .arch <<< "${entry}")"
+                  if is_covered "$2 (${branch}, ${arch})" \
+                     && ! jq -e --arg k "${branch}-${arch}" 'index($k)' <<< "${media}" > /dev/null; then
+                    continue
+                  fi
+                  out="$(jq -c ". + [${entry}]" <<< "${out}")"
+                done < <(jq -c '.[]' <<< "${legs}")
+                legs="${out}"
+              }
+              filter bluespin bluespin bluespin_installer
+              filter dx bluespin-dx dx_installer
+              filter surface bluespin-surface surface_installer
+              filter fp5 bluespin-fp5 fp5_disk
+
+              # Every variant leg INHERITS its base leg's image -- fp5
+              # layers on the arm bluespin exactly as dx and surface
+              # layer on the x86 one (see the share and from_image
+              # inputs below) -- so a base only counts as covered if its
+              # run FINISHED: the artifact must exist to download. A
+              # base that is merely still running elsewhere gets rebuilt
+              # here; the duplicate build is the price of not polling
+              # another run.
+              while IFS=$'\t' read -r branch arch; do
+                [[ -z "${branch}" ]] && continue
+                base="{\"fedora_branch\":\"${branch}\",\"arch\":\"${arch}\"}"
+                if ! jq -e --argjson b "${base}" 'index($b)' <<< "${bluespin}" > /dev/null; then
+                  name="bluespin (${branch}, ${arch})"
+                  if [[ -n "${done_run[${name}]:-}" ]]; then
+                    base_runs="$(jq -c --arg k "${branch}-${arch}" --arg v "${done_run[${name}]}" '. + {($k): $v}' <<< "${base_runs}")"
+                  else
+                    add bluespin "${base}"
+                  fi
+                fi
+              done < <(jq -r '.[] | [.fedora_branch, .arch] | @tsv' \
+                         <<< "$(jq -cs 'add' <(echo "${dx}") <(echo "${surface}") <(echo "${fp5}"))" | sort -u)
+            fi
+
+          elif [[ "${EVENT}" == "workflow_dispatch" ]]; then
+            # The branches input drives the x86 standard and variant legs;
+            # the arm and fp5 legs keep the push shape
+            for b in $(jq -r '.[]' <<< "${DISPATCH_BRANCHES}"); do
+              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              add dx "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              add surface "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+            done
+            add bluespin '{"fedora_branch":"44","arch":"arm64"}'
+            add bluespin '{"fedora_branch":"45","arch":"arm64"}'
+            add fp5 '{"fedora_branch":"45","arch":"arm64"}'
+          else
+            # Pushes and the nightly: the full published matrix. amd64
+            # builds every branch, rawhide included -- the early-warning
+            # leg; arm builds the branched releases; the variants build
+            # the branched releases (rawhide adds no variant-specific
+            # signal -- the surface kernel rebase trails mainline rc by
+            # construction); fp5 builds the one branch with a mobile
+            # shell.
+            for b in 44 45 rawhide; do
+              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+            done
+            for b in 44 45; do
+              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"arm64\"}"
+              add dx "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              add surface "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+            done
+            add fp5 '{"fedora_branch":"45","arch":"arm64"}'
+          fi
+
+          {
+            echo "bluespin=${bluespin}"
+            echo "dx=${dx}"
+            echo "surface=${surface}"
+            echo "fp5=${fp5}"
+            echo "bluespin_installer=${bluespin_installer}"
+            echo "dx_installer=${dx_installer}"
+            echo "surface_installer=${surface_installer}"
+            echo "fp5_disk=${fp5_disk}"
+            echo "base_runs=${base_runs}"
+          } | tee -a "$GITHUB_OUTPUT"
+
+          # The plan travels with the run: the follow-on workflows read
+          # this instead of re-deriving labels, and it records which
+          # pull request and event the run served
+          jq -n \
+            --argjson bluespin "${bluespin}" \
+            --argjson dx "${dx}" \
+            --argjson surface "${surface}" \
+            --argjson fp5 "${fp5}" \
+            --argjson bluespin_installer "${bluespin_installer}" \
+            --argjson dx_installer "${dx_installer}" \
+            --argjson surface_installer "${surface_installer}" \
+            --argjson fp5_disk "${fp5_disk}" \
+            --arg event "${EVENT}" \
+            --arg pr "${PR_NUMBER}" \
+            '{event: $event, pr: $pr,
+              bluespin: $bluespin, dx: $dx, surface: $surface, fp5: $fp5,
+              bluespin_installer: $bluespin_installer, dx_installer: $dx_installer,
+              surface_installer: $surface_installer, fp5_disk: $fp5_disk}' \
+            > plan.json
+          cat plan.json
+
+      - name: Upload the plan
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: plan
+          path: plan.json
+          retention-days: 1
+
+  # No `name:` on the build jobs: the job id plus the matrix values IS
+  # the display convention -- bluespin (44, amd64) -- and a job an
+  # unlabeled pull request skips then shows its bare id instead of a raw
+  # name template.
   bluespin:
-    name: bluespin (${{ matrix.fedora_branch }})
+    needs: plan
+    if: ${{ needs.plan.outputs.bluespin != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        # Pushes and the nightly build every branch, rawhide included --
-        # the early-warning leg. Pull requests build the branched releases
-        # only. A dispatch can ask for any list.
-        fedora_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.fedora_branches || (github.event_name == 'pull_request' && '["44", "45"]' || '["44", "45", "rawhide"]')) }}
+        include: ${{ fromJSON(needs.plan.outputs.bluespin) }}
     permissions:
       contents: read
       packages: write
-      id-token: write
-      security-events: write
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/build-oci.yml
     with:
       platform: bluespin
       fedora_branch: ${{ matrix.fedora_branch }}
       image_desc: "Bluespin"
+      runner: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+      arch: ${{ matrix.arch }}
+      # The per-arch legs publish under instance tags the manifest job
+      # stitches into the multi-arch branch and latest tags
+      tag_suffix: "-${{ matrix.arch }}"
     secrets: inherit
 
-  variants:
-    name: ${{ matrix.platform }} (${{ matrix.fedora_branch }})
+  # Every floating tag -- 44, 45, rawhide, latest and their dated
+  # aliases -- serves a manifest index. The per-arch legs published
+  # their images under per-arch instance tags (-amd64/-arm64, the OCI
+  # names) and signed their own digests; this job assembles the index
+  # each branch tag actually serves (single-entry for rawhide until it
+  # grows an arm leg), repoints the aliases (latest lives with the
+  # default branch). Signing -- of these indexes and of every instance
+  # digest -- lives in sign.yml, which fires when this run completes:
+  # together the equivalent of `cosign sign --recursive`, so
+  # verification finds a signature at whichever level c/image checks,
+  # after a brief unsigned window that on-device policy tolerates by
+  # retrying its next update. One job looping the
+  # branches rather than a matrix: each stitch is seconds of registry
+  # work, and a skipped matrix job renders its name template raw in
+  # every pull request's check list. Pushes only: pull requests publish
+  # nothing to stitch. The BRANCH_ARCHES table is the stitch list: a
+  # hand-dispatched branch outside it publishes instance tags only.
+  manifest:
+    name: bluespin (manifest)
     needs: bluespin
-    # The bluespin caller job reports failure if ANY job in the called
-    # workflow fails -- the attest job included, whose failures are
-    # typically an external service flaking after the image already
-    # published (the first main run lost its 45 variants to exactly that:
-    # a Rekor 502 during attest). On pushes the variants' own Resolve step
-    # is the real gate -- no published bluespin digest, no leg -- so
-    # attempt them unless the run was cancelled. On pull requests the legs
-    # are self-contained and would only replay the same build failure, so
-    # the hard gate stays.
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.bluespin.result == 'success') }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - bluespin-dx
-          - bluespin-surface
-        # The branched releases only: rawhide is the bluespin image's
-        # early-warning leg (the GNOME and extension asserts run there),
-        # and the variants add no rawhide-specific signal -- the surface
-        # kernel rebase trails mainline rc by construction. A dispatch can
-        # still ask for a variant rawhide leg by hand.
-        fedora_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.fedora_branches || '["44", "45"]') }}
-        include:
-          - platform: bluespin-dx
-            image_desc: "Bluespin DX"
-          - platform: bluespin-surface
-            image_desc: "Bluespin for Microsoft Surface devices"
+    if: ${{ !cancelled() && needs.bluespin.result == 'success' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-      id-token: write
-      security-events: write
-    uses: ./.github/workflows/build-image.yml
+    env:
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+    steps:
+      # For .github/scripts/retry.sh and bluespin.env
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assemble and verify the indexes
+        run: |
+          set -euo pipefail
+          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
+          reg="${IMAGE_REGISTRY,,}"
+          # The stitch list, with each branch's architectures (OCI names:
+          # tags, platform fields and this table share one vocabulary)
+          declare -A BRANCH_ARCHES=(
+            [44]="amd64 arm64"
+            [45]="amd64 arm64"
+            [rawhide]="amd64"
+          )
+          source bluespin.env
+          DATE=$(date +%Y%m%d)
+          for branch in 44 45 rawhide; do
+            arches="${BRANCH_ARCHES[${branch}]}"
+
+            podman manifest rm idx 2>/dev/null || true
+            podman manifest create idx
+            for arch in ${arches}; do
+              podman manifest add idx "docker://${reg}/bluespin:${branch}-${arch}"
+            done
+            podman manifest push --digestfile=/tmp/digestfile idx \
+              "docker://${reg}/bluespin:${branch}"
+            digest=$(< /tmp/digestfile)
+
+            # The same floating aliases the amd64 leg used to own, now
+            # pointing at the index; latest travels with the default branch
+            aliases=("${branch}-${DATE}")
+            if [[ "${branch}" == "${DEFAULT_FEDORA_BRANCH}" ]]; then
+              aliases+=("latest" "latest-${DATE}" "${DATE}")
+            fi
+            for tag in "${aliases[@]}"; do
+              # --all: copy the index together with the instances it references
+              skopeo copy --all "docker://${reg}/bluespin@${digest}" \
+                "docker://${reg}/bluespin:${tag}"
+            done
+
+            # Every tag must serve an index carrying exactly this branch's
+            # architectures; fail before signing rather than sign a stitch
+            # that silently lost a platform or left an alias behind.
+            expected="$(for a in ${arches}; do echo "${a}"; done | sort | jq -R . | jq -sc .)"
+            skopeo inspect --raw "docker://${reg}/bluespin:${branch}" \
+              | jq -e --argjson want "${expected}" '
+                  (.mediaType | test("list|index")) and
+                  (([.manifests[].platform.architecture] | sort) == $want)'
+            for tag in "${aliases[@]}"; do
+              got="$(skopeo inspect --no-tags --format '{{.Digest}}' \
+                "docker://${reg}/bluespin:${tag}")"
+              [[ "${got}" == "${digest}" ]] || {
+                echo "::error::bluespin:${tag} is ${got}, expected ${digest}"
+                exit 1
+              }
+            done
+          done
+
+  # The variants are true layers on every event: on pushes they build
+  # FROM the published -amd64 instance digest, on pull requests FROM the
+  # very image the base leg just built, handed over as a workflow
+  # artifact -- fp5 layers on the arm bluespin exactly the same way. The
+  # bluespin caller job reports failure if ANY job in the called
+  # workflow fails -- the attest job included, whose failures are
+  # typically an external service flaking after the image already
+  # published. On pushes the variants' own Resolve step is the real gate
+  # -- no published bluespin digest, no leg -- so attempt them unless the
+  # run was cancelled; skipped counts as covered-elsewhere on pull
+  # requests (a labeled delta run).
+  bluespin-dx:
+    needs:
+      - plan
+      - bluespin
+    # skipped counts as success on pull requests: a labeled delta run
+    # skips the bluespin job when another run of this SHA already covers
+    # its legs
+    if: ${{ !cancelled() && needs.plan.outputs.dx != '[]' && (github.event_name != 'pull_request' || contains(fromJSON('["success", "skipped"]'), needs.bluespin.result)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.dx) }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-oci.yml
     with:
-      platform: ${{ matrix.platform }}
+      platform: bluespin-dx
       fedora_branch: ${{ matrix.fedora_branch }}
-      image_desc: ${{ matrix.image_desc }}
+      image_desc: "Bluespin DX"
       from_bluespin: true
+      # The branch tag serves yesterday's index until the manifest job
+      # finishes; the -amd64 instance tag is fresh the moment the
+      # bluespin leg pushed it
+      bluespin_tag_suffix: "-amd64"
+      # PR-side: build FROM the very image the base leg just built
+      from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-amd64', matrix.fedora_branch) || '' }}
+      from_image_run_id: ${{ fromJSON(needs.plan.outputs.base_runs)[format('{0}-amd64', matrix.fedora_branch)] || '' }}
+    secrets: inherit
+
+  bluespin-surface:
+    needs:
+      - plan
+      - bluespin
+    if: ${{ !cancelled() && needs.plan.outputs.surface != '[]' && (github.event_name != 'pull_request' || contains(fromJSON('["success", "skipped"]'), needs.bluespin.result)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.surface) }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-oci.yml
+    with:
+      platform: bluespin-surface
+      fedora_branch: ${{ matrix.fedora_branch }}
+      image_desc: "Bluespin for Microsoft Surface devices"
+      from_bluespin: true
+      bluespin_tag_suffix: "-amd64"
+      from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-amd64', matrix.fedora_branch) || '' }}
+      from_image_run_id: ${{ fromJSON(needs.plan.outputs.base_runs)[format('{0}-amd64', matrix.fedora_branch)] || '' }}
+    secrets: inherit
+
+  # The device layer on the generic aarch64 image: on pushes it builds
+  # FROM the bluespin:<branch>-arm64 instance the bluespin job just
+  # published (not the stitched index -- the instance tag needs no wait
+  # on the manifest job); on pull requests it builds FROM the very image
+  # its base leg just built, handed over as a workflow artifact (from
+  # this run, or the finished run the plan found already covering the
+  # base). Native arm64 runner -- qemu-emulating a full desktop
+  # build would take hours. fp5.sh gates on @mobility/gnome-mobile
+  # publishing a mobile shell for the branch within seconds of starting.
+  bluespin-fp5:
+    needs:
+      - plan
+      - bluespin
+    if: ${{ !cancelled() && needs.plan.outputs.fp5 != '[]' && (github.event_name != 'pull_request' || contains(fromJSON('["success", "skipped"]'), needs.bluespin.result)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.fp5) }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-oci.yml
+    with:
+      platform: bluespin-fp5
+      fedora_branch: ${{ matrix.fedora_branch }}
+      image_desc: "Bluespin for the Fairphone 5"
+      runner: ubuntu-24.04-arm
+      arch: arm64
+      from_bluespin: true
+      bluespin_tag_suffix: "-arm64"
+      # The PR-side inheritance: load the base leg's image from its
+      # artifact and build FROM it
+      from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-arm64', matrix.fedora_branch) || '' }}
+      from_image_run_id: ${{ fromJSON(needs.plan.outputs.base_runs)[format('{0}-arm64', matrix.fedora_branch)] || '' }}
     secrets: inherit
