@@ -33,12 +33,12 @@
 #                       builds: ci-installer, ci-arm-installer,
 #                       ci-dx-installer, ci-surface-installer, and their
 #                       -rawhide forms -- each implies its leg's flag;
-#                       build-iso.yml fires when this run completes and
+#                       build-installer.yml fires when this run completes
 #                       builds the ISO from the leg's shared image
 #   *-disk              the flashable fp5 disk image -- the phone's
 #                       installer substitute: ci-fp5-disk and
 #                       ci-fp5-rawhide-disk, same shape, built by
-#                       build-fp5-images.yml when this run completes
+#                       build-disk.yml when this run completes
 #
 # Every pull-request leg shares its built image as a one-day workflow
 # artifact, and the plan publishes its leg lists as a `plan` artifact:
@@ -349,9 +349,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
-      security-events: write
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/build-oci.yml
     with:
       platform: bluespin
       fedora_branch: ${{ matrix.fedora_branch }}
@@ -369,9 +367,12 @@ jobs:
   # names) and signed their own digests; this job assembles the index
   # each branch tag actually serves (single-entry for rawhide until it
   # grows an arm leg), repoints the aliases (latest lives with the
-  # default branch), and signs each index digest -- together the
-  # equivalent of `cosign sign --recursive`, so verification finds a
-  # signature at whichever level c/image checks. One job looping the
+  # default branch). Signing -- of these indexes and of every instance
+  # digest -- lives in sign.yml, which fires when this run completes:
+  # together the equivalent of `cosign sign --recursive`, so
+  # verification finds a signature at whichever level c/image checks,
+  # after a brief unsigned window that on-device policy tolerates by
+  # retrying its next update. One job looping the
   # branches rather than a matrix: each stitch is seconds of registry
   # work, and a skipped matrix job renders its name template raw in
   # every pull request's check list. Pushes only: pull requests publish
@@ -385,7 +386,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
     env:
       IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
     steps:
@@ -400,16 +400,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-        with:
-          # be careful when upgrading major versions
-          cosign-release: 'v3.1.3'
-
-      - name: Assemble, verify and sign the indexes
-        env:
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+      - name: Assemble and verify the indexes
         run: |
           set -euo pipefail
           # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
@@ -463,13 +454,6 @@ jobs:
                 exit 1
               }
             done
-
-            # Keyed then keyless, same story as the per-arch legs; retried,
-            # same Rekor reasoning as retry.sh explains
-            .github/scripts/retry.sh 3 30 \
-              cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "${reg}/bluespin@${digest}"
-            .github/scripts/retry.sh 3 30 \
-              cosign sign -y --new-bundle-format=false --use-signing-config=false "${reg}/bluespin@${digest}"
           done
 
   # The variants are true layers on every event: on pushes they build
@@ -498,14 +482,11 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
-      security-events: write
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/build-oci.yml
     with:
       platform: bluespin-dx
       fedora_branch: ${{ matrix.fedora_branch }}
       image_desc: "Bluespin DX"
-      pr_installer_image: ${{ contains(fromJSON(needs.plan.outputs.dx_installer), format('{0}-{1}', matrix.fedora_branch, matrix.arch)) }}
       from_bluespin: true
       # The branch tag serves yesterday's index until the manifest job
       # finishes; the -amd64 instance tag is fresh the moment the
@@ -528,14 +509,11 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
-      security-events: write
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/build-oci.yml
     with:
       platform: bluespin-surface
       fedora_branch: ${{ matrix.fedora_branch }}
       image_desc: "Bluespin for Microsoft Surface devices"
-      pr_installer_image: ${{ contains(fromJSON(needs.plan.outputs.surface_installer), format('{0}-{1}', matrix.fedora_branch, matrix.arch)) }}
       from_bluespin: true
       bluespin_tag_suffix: "-amd64"
       from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-amd64', matrix.fedora_branch) || '' }}
@@ -563,9 +541,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
-      security-events: write
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/build-oci.yml
     with:
       platform: bluespin-fp5
       fedora_branch: ${{ matrix.fedora_branch }}

@@ -1,0 +1,96 @@
+---
+# What every installed extension declares against the shell each built
+# image actually ships. This is the visibility mechanism for
+# installed-but-disabled extensions, whose shell coverage is
+# deliberately not a hard build gate -- only what a platform enables is,
+# see assert_enabled_extensions in build_files/extensions.sh.
+# Informational by design: it must never block a build, which is exactly
+# why it is its own workflow, fired on the build run's completion,
+# acquiring each leg's image the same way every follow-on workflow does.
+# The report runs the image, so arm legs report on an arm runner.
+name: GNOME compatibility report
+on:
+  workflow_run:
+    workflows:
+      - Build Bluespin container image
+    types:
+      - completed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: plan
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      legs: ${{ steps.map.outputs.legs }}
+      event: ${{ steps.map.outputs.event }}
+    steps:
+      - name: Download the build run's plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plan
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Map the built legs
+        id: map
+        run: |
+          set -euo pipefail
+          legs="$(jq -c '
+            [ (.bluespin[] | {platform: "bluespin", fedora_branch, arch, tag_suffix: ("-" + .arch)}),
+              (.dx[] | {platform: "bluespin-dx", fedora_branch, arch, tag_suffix: ""}),
+              (.surface[] | {platform: "bluespin-surface", fedora_branch, arch, tag_suffix: ""}),
+              (.fp5[] | {platform: "bluespin-fp5", fedora_branch, arch, tag_suffix: ""}) ]' plan.json)"
+          {
+            echo "legs=${legs}"
+            echo "event=$(jq -r .event plan.json)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  report:
+    name: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, gnome)
+    needs: plan
+    if: ${{ needs.plan.outputs.legs != '[]' }}
+    # The report runs the image, so the runner must match its arch
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.legs) }}
+    steps:
+      # For the report script and the acquire-image action
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Acquire the leg's image
+        id: acquire
+        uses: ./.github/actions/acquire-image
+        with:
+          platform: ${{ matrix.platform }}
+          fedora_branch: ${{ matrix.fedora_branch }}
+          tag_suffix: ${{ matrix.tag_suffix }}
+          source: ${{ needs.plan.outputs.event == 'pull_request' && 'artifact' || 'registry' }}
+          run-id: ${{ github.event.workflow_run.id }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+          github-token: ${{ github.token }}
+
+      - name: Report GNOME compatibility
+        run: |
+          set -euo pipefail
+          ref="${{ steps.acquire.outputs.ref }}"
+          podman image exists "${ref}" || podman pull -q "${ref}"
+          echo "### ${{ matrix.platform }}:${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}" >> "$GITHUB_STEP_SUMMARY"
+          podman run --rm \
+            -v "${PWD}/.github/scripts/report-extensions.sh:/tmp/report.sh:ro,Z" \
+            --entrypoint bash "${ref}" /tmp/report.sh \
+            >> "$GITHUB_STEP_SUMMARY"

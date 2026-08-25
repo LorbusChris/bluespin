@@ -8,7 +8,7 @@
 # apart outlast a gateway blip without masking a real outage. (What this
 # canNOT fix: a deterministic rejection. The 2026-08-25 attest failures
 # retried identically forever because the payload itself was too big --
-# see the Generate SBOM step in build-image.yml.)
+# see the Generate SBOMs step in scan.yml.)
 set -uo pipefail
 
 tries=$1

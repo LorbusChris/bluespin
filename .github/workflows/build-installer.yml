@@ -4,7 +4,7 @@
 # is a multi-arch manifest and an arm runner pulling it gets the arm
 # image. bluespin-fp5 is deliberately absent: a phone is flashed with
 # fastboot, and its install medium is the disk image from
-# build-fp5-images.yml.
+# build-disk.yml.
 #
 # Install media are release moments: the daily builds publish only the
 # OCI images existing installs update from, and the ISOs build when a

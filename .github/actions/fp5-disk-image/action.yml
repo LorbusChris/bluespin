@@ -2,7 +2,7 @@
 # The flashable-disk pipeline for the Fairphone 5, from a bluespin-fp5
 # container that is already in root's container storage.
 #
-# Shared by build-fp5-images.yml's two paths, which get the container
+# Shared by build-disk.yml's two paths, which get the container
 # there differently: the release/dispatch job pulls a published tag, and
 # the pull-request job loads the fp5 leg's shared-image artifact.
 # Everything after that point is identical, so it lives here once. The

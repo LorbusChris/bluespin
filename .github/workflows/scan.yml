@@ -1,0 +1,170 @@
+---
+# SBOMs and vulnerability reports for what the build run built, with the
+# very syft and grype the dx image offers as podman functions -- the
+# digest pins in files/etc/profile.d/97-bluespin-container-clis.sh are
+# the one Renovate-tracked source for both. One concern per workflow:
+# this fires when a build run completes, acquires each leg's image (the
+# shared artifact on pull requests, the registry on pushes), and scans
+# it; attest.yml fires when THIS run completes and attaches the SBOMs to
+# the published digests.
+#
+# One scan, two documents per leg. SPDX is the standard the world can
+# consume -- package-level (files stripped, with every relationship that
+# referenced them: syft's raw SPDX for an OS image is ~109 MB and its
+# DSSE would be refused by Rekor's ~32 MiB cap), purls kept and syft's
+# generated CPE guesses dropped -- and is what attest.yml attaches. The
+# syft-native document carries the Go function symbols SPDX cannot
+# (without them grype matches Go binaries at module granularity: 92 of
+# 330 findings on this image were that noise), so grype reads it
+# instead. Report-only by design: a distro image always carries open RPM
+# CVEs, so a gate would simply stay red.
+name: Scan Bluespin images
+on:
+  workflow_run:
+    workflows:
+      - Build Bluespin container image
+    types:
+      - completed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: plan
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      legs: ${{ steps.map.outputs.legs }}
+      event: ${{ steps.map.outputs.event }}
+    steps:
+      - name: Download the build run's plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plan
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Map the built legs
+        id: map
+        run: |
+          set -euo pipefail
+          legs="$(jq -c '
+            [ (.bluespin[] | {platform: "bluespin", fedora_branch, arch, tag_suffix: ("-" + .arch)}),
+              (.dx[] | {platform: "bluespin-dx", fedora_branch, arch, tag_suffix: ""}),
+              (.surface[] | {platform: "bluespin-surface", fedora_branch, arch, tag_suffix: ""}),
+              (.fp5[] | {platform: "bluespin-fp5", fedora_branch, arch, tag_suffix: ""}) ]' plan.json)"
+          {
+            echo "legs=${legs}"
+            echo "event=$(jq -r .event plan.json)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      # attest.yml reads the plan from THIS run
+      - name: Pass the plan along
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: plan
+          path: plan.json
+          retention-days: 1
+
+  scan:
+    name: ${{ matrix.platform }} (${{ matrix.fedora_branch }}, ${{ matrix.arch }}, scan)
+    needs: plan
+    if: ${{ needs.plan.outputs.legs != '[]' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    env:
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.legs) }}
+    steps:
+      # For the pinned scanner images and the acquire-image action
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Acquire the leg's image
+        id: acquire
+        uses: ./.github/actions/acquire-image
+        with:
+          platform: ${{ matrix.platform }}
+          fedora_branch: ${{ matrix.fedora_branch }}
+          tag_suffix: ${{ matrix.tag_suffix }}
+          source: ${{ needs.plan.outputs.event == 'pull_request' && 'artifact' || 'registry' }}
+          run-id: ${{ github.event.workflow_run.id }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+          github-token: ${{ github.token }}
+
+      - name: Generate SBOMs
+        run: |
+          set -euo pipefail
+          ref="${{ steps.acquire.outputs.ref }}"
+          # A registry ref is digest-pinned, so a cross-arch pull on this
+          # runner fetches exactly the leg's instance; syft never runs
+          # the image, only reads it
+          podman image exists "${ref}" || podman pull -q "${ref}"
+          podman save --format oci-archive -o /tmp/image.oci "${ref}"
+          syft_image="$(sed -n 's/^SYFT_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
+          podman run --rm -e SYFT_GOLANG_CAPTURE_SYMBOLS=all \
+            -v /tmp/image.oci:/image.oci:ro -v "${PWD}:/out" "${syft_image}" \
+            scan oci-archive:/image.oci \
+            -o spdx-json=/out/sbom.full.json \
+            -o syft-json=/out/sbom.syft.full.json
+          jq '
+            .files = []
+            | ([.SPDXID] + (.packages | map(.SPDXID)) | map({(.): true}) | add) as $keep
+            | .relationships = [.relationships[]
+                | select($keep[.spdxElementId] and $keep[.relatedSpdxElement])]
+            | .packages = [.packages[]
+                | if .externalRefs then .externalRefs = [.externalRefs[] | select(.referenceType == "purl")] else . end
+                | if .externalRefs == [] then del(.externalRefs) else . end]
+          ' sbom.full.json > sbom.spdx.json
+          jq '
+            .files = []
+            | ([.source.id] + [.artifacts[].id] | map({(.): true}) | add) as $keep
+            | .artifactRelationships = [.artifactRelationships[]
+                | select($keep[.parent] and $keep[.child])]
+          ' sbom.syft.full.json > sbom.syft.json
+          rm -f /tmp/image.oci sbom.full.json sbom.syft.full.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: sbom-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}
+          path: |
+            sbom.spdx.json
+            sbom.syft.json
+
+      - name: Vulnerability report
+        run: |
+          set -euo pipefail
+          grype_image="$(sed -n 's/^GRYPE_IMAGE=//p' files/etc/profile.d/97-bluespin-container-clis.sh)"
+          podman run --rm -v "${PWD}/sbom.syft.json:/sbom.json:ro" "${grype_image}" \
+            sbom:/sbom.json -o json > grype.json
+          podman run --rm -v "${PWD}/sbom.syft.json:/sbom.json:ro" "${grype_image}" \
+            sbom:/sbom.json -o sarif > grype.sarif
+          {
+            echo "### Vulnerabilities: ${{ matrix.platform }}:${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}"
+            echo ""
+            echo "| Severity | Count |"
+            echo "| --- | --- |"
+            jq -r '[.matches[].vulnerability.severity] | group_by(.) | map({(.[0]): length}) | add // {} | to_entries[] | "| \(.key) | \(.value) |"' grype.json
+            echo ""
+            echo "$(jq '[.matches[] | select(.vulnerability.fix.state == "fixed")] | length' grype.json) with a fix available upstream."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Into the repository's code-scanning view, one category per leg;
+      # main is the state worth tracking
+      - name: Upload vulnerability report to code scanning
+        if: ${{ needs.plan.outputs.event != 'pull_request' }}
+        uses: github/codeql-action/upload-sarif@df559355d593797519d70b90fc8edd5db049e7a2 # v4
+        with:
+          sarif_file: grype.sarif
+          category: grype-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.tag_suffix }}

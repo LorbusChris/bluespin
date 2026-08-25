@@ -135,17 +135,18 @@ over them are each cosign-signed -- verification holds whether a client
 resolves the index or an instance -- and `bootc switch` on an aarch64
 UEFI machine simply gets the arm image.
 
-Every published digest additionally carries a **keyless** signature bound to
-the build workflow's OIDC identity (Fulcio certificate, logged in Rekor).
-The identity is the *reusable* workflow that actually signs --
-`build-image.yml`, not the `build.yml` caller -- because that is how
-GitHub mints OIDC tokens for reusable workflows. On-device verification
-keeps enforcing the key; the keyless signature exists so a later switch is
-a policy change rather than a re-signing campaign. To verify it:
+Every published digest additionally carries a **keyless** signature bound
+to the OIDC identity of the workflow that actually signs -- that is
+[sign.yml](.github/workflows/sign.yml), the dedicated signing workflow
+(GitHub mints the token for the workflow file running the job; digests
+published before the pipeline split carry earlier identities such as
+`build-image.yml`). On-device verification keeps enforcing the key; the
+keyless signature exists so a later switch is a policy change rather than
+a re-signing campaign. To verify it:
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/build-image\.yml@.*' \
+  --certificate-identity-regexp 'https://github.com/LorbusChris/bluespin/\.github/workflows/sign\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/lorbuschris/bluespin:latest
 ```
@@ -336,7 +337,7 @@ and publishes the bluespin image first and the variant jobs then build
 `FROM` that published digest (`BLUESPIN_IMAGE`), so dx and surface never
 rebuild the bluespin content
 (see [`build.yml`](.github/workflows/build.yml) calling
-[`build-image.yml`](.github/workflows/build-image.yml)). Every published
+[`build-oci.yml`](.github/workflows/build-oci.yml)). Every published
 image is then rechunked with [chunkah](https://github.com/coreos/chunkah),
 so a client update downloads only the chunks whose packages changed. CI
 builds the matrix daily and on every push to `main`.
@@ -374,6 +375,6 @@ all come from Flathub, validated in CI.
 Live installer ISOs are built with
 [Titanoboa](https://github.com/ublue-os/titanoboa) directly from the
 published images — the same mechanism Bluefin and Bazzite use. Trigger the
-[`Build Bluespin ISOs`](.github/workflows/build-iso.yml) workflow from the
+[`Build Bluespin ISOs`](.github/workflows/build-installer.yml) workflow from the
 Actions tab; it produces one ISO per variant (with checksums) as workflow
 artifacts.
