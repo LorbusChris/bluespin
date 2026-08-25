@@ -80,8 +80,8 @@ MOSAICWM_51_COMMIT=b7c5a9e01193b9ec193479da9581e6bf98d685e3
 
 # renovate: datasource=git-refs depName=https://gitlab.com/lorbus42/NekoTorch branch=master
 NEKOTORCH_COMMIT=9a76e88d7ded4c587a5ac88b47fe607e5803c77a
-# renovate: datasource=git-refs depName=https://gitlab.com/NekoCWD/NekoTorch branch=master
-NEKOTORCH_UPSTREAM_COMMIT=6eed57da9717080507e513bf5420c88c770cfbf7
+# renovate: datasource=gitlab-tags depName=NekoCWD/NekoTorch registryUrl=https://gitlab.com
+NEKOTORCH_UPSTREAM_REF=V0.1
 
 # renovate: datasource=git-refs depName=https://github.com/LorbusChris/search-light branch=main
 SEARCH_LIGHT_COMMIT=846ca1d2970d4a5f71e90c8f4ac8f6ed430a9cd0
@@ -90,14 +90,14 @@ SEARCH_LIGHT_UPSTREAM_COMMIT=4e93e0e3e2fba8512dfd588177b7a6a2a71c9f1e
 
 # renovate: datasource=git-refs depName=https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not branch=main
 WEATHER_OR_NOT_COMMIT=b922e8991029e4c288c58afff850c2bcbbcda524
-# renovate: datasource=github-tags depName=somepaulo/GNOME-Shell-extension-Weather-or-Not
-WEATHER_OR_NOT_UPSTREAM_REF=v48
+# renovate: datasource=gitlab-tags depName=somepaulo/weather-or-not registryUrl=https://gitlab.gnome.org
+WEATHER_OR_NOT_UPSTREAM_REF=v50
 
 # The watcher variables, expanded once so shellcheck sees them used --
 # Renovate reads those lines; the build does not
 : "${APPINDICATOR_REF}" "${BAZAAR_INTEGRATION_UPSTREAM_COMMIT}" \
     "${CAFFEINE_UPSTREAM_REF}" "${GNOME_SHELL_EXTENSIONS_UPSTREAM_REF}" \
-    "${GRADIA_INTEGRATION_UPSTREAM_COMMIT}" "${NEKOTORCH_UPSTREAM_COMMIT}" \
+    "${GRADIA_INTEGRATION_UPSTREAM_COMMIT}" "${NEKOTORCH_UPSTREAM_REF}" \
     "${SEARCH_LIGHT_UPSTREAM_COMMIT}" "${WEATHER_OR_NOT_UPSTREAM_REF}"
 
 # Fetch one pinned repository at an exact commit into dest, as the forge's
