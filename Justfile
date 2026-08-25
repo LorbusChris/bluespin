@@ -191,6 +191,49 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 
+# Layer the container-native ISO contract onto a built image, for
+# Titanoboa to turn into a live installer ISO: Anaconda, the livesys
+# session, an initramfs that can boot a squashfs, and iso.yaml itself.
+#
+#   just live-image ghcr.io/lorbuschris/bluespin:45 bluespin 45
+#
+# base_ref is the image to layer on, platform names the family member it
+# belongs to, and the branch decides what an install will track -- the
+# channel alias for that branch, so a machine installed from stable's
+# media follows stable across the next Fedora branch by itself. Tags
+# out_tag, which CI sets to the ref it publishes the media image under.
+#
+# This is install media in container form: the installer belongs here,
+# not in an image whose only job is to update an existing system.
+[group('Build')]
+live-image $base_ref $platform=image_name $branch=default_fedora_branch $out_tag="":
+    #!/usr/bin/env bash
+    set -euox pipefail
+
+    # The channel this medium installs, from the same table the tags use
+    case "${branch}" in
+        "${DEFAULT_FEDORA_BRANCH}") channel=latest ;;
+        "${NEXT_FEDORA_BRANCH}") channel=next ;;
+        rawhide) channel=rolling ;;
+        *) channel="${branch}" ;;
+    esac
+    install_ref="ghcr.io/${REPO_ORGANIZATION,,}/${platform}:${channel}"
+
+    # The ISO's volume label, which its own boot entries name back and
+    # which titanoboa names the file after. Volume IDs cap at 32 chars.
+    iso_label="${platform}-${branch}"
+
+    tag="${out_tag:-localhost/${platform}-live:${branch}}"
+
+    podman build \
+        --target live \
+        --build-arg "LIVE_BASE_IMAGE=${base_ref}" \
+        --build-arg "IMAGE_NAME=${platform}" \
+        --build-arg "INSTALL_REF=${install_ref}" \
+        --build-arg "ISO_LABEL=${iso_label}" \
+        --tag "${tag}" \
+        .
+
 # Split the image for smaller updates (New)!
 rechunk $target_image=image_name $tag=default_fedora_branch:
     #!/usr/bin/env bash

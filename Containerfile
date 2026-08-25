@@ -17,6 +17,9 @@
 # rechunked per image for small client updates -- see build-image.yml.)
 ARG BASE_IMAGE
 ARG BLUESPIN_IMAGE=bluespin
+# The image the live stage layers on -- any built platform image, since
+# an ISO exists per platform. Never a published image itself.
+ARG LIVE_BASE_IMAGE=bluespin
 
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
@@ -130,3 +133,27 @@ RUN --mount=type=cache,dst=/var/cache/libdnf5 \
     /ctx/build_files/variant-finish.sh bluespin-fp5
 
 RUN bootc container lint
+
+# The install medium's layer: the container-native ISO contract, added
+# at media build time on top of an already-built platform image. Nothing
+# here ships in the images people run -- an installer has no business on
+# a machine that only ever updates -- but the layer itself is published
+# and signed as <platform>-live:<branch>-<arch>, so install media has
+# the same provenance chain as everything else here. Nothing updates
+# from a -live tag. INSTALL_REF is what an install from the resulting
+# ISO will track: a channel alias, so the machine follows stable (or
+# next, or rolling) on its own afterwards.
+#
+# No `bootc container lint` here: this image is nobody's update target,
+# and it deliberately carries what lint is right to question on one that
+# is -- a populated /boot/efi above all.
+FROM ${LIVE_BASE_IMAGE} AS live
+
+ARG IMAGE_NAME=bluespin
+ARG INSTALL_REF
+ARG ISO_LABEL
+
+RUN --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=bind,from=ctx,source=/,target=/ctx \
+    /ctx/build_files/live.sh
