@@ -127,7 +127,10 @@ jobs:
             esac
             addleg "{\"image_name\":\"bluespin\",\"fedora_branch\":\"${tag}\",\"arch\":\"${arch}\"}"
           done
-          for name in bluespin-dx bluespin-surface; do
+          # No dx installer: the developer layer is something you
+          # rebase to from a running bluespin, not something anyone
+          # installs onto bare metal
+          for name in bluespin-surface; do
             if skopeo inspect --no-tags --format '{{.Digest}}' \
                 "docker://${reg}/${name}:${tag}" > /dev/null 2>&1; then
               addleg "{\"image_name\":\"${name}\",\"fedora_branch\":\"${tag}\",\"arch\":\"amd64\"}"
@@ -330,10 +333,6 @@ jobs:
           for key in $(jq -r '.bluespin_installer[]' plan.json); do
             branch="${key%-*}"; arch="${key##*-}"
             addleg "{\"platform\":\"bluespin\",\"fedora_branch\":\"${branch}\",\"arch\":\"${arch}\"}"
-          done
-          for key in $(jq -r '.dx_installer[]' plan.json); do
-            branch="${key%-*}"
-            addleg "{\"platform\":\"bluespin-dx\",\"fedora_branch\":\"${branch}\",\"arch\":\"amd64\"}"
           done
           for key in $(jq -r '.surface_installer[]' plan.json); do
             branch="${key%-*}"

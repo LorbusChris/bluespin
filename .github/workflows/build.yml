@@ -34,10 +34,12 @@
 #                       ci-fp5-rawhide), same implications per branch
 #   *-installer         a live installer ISO from the very image the leg
 #                       builds: ci-installer, ci-arm-installer,
-#                       ci-dx-installer, ci-surface-installer, and their
-#                       -rawhide forms -- each implies its leg's flag;
-#                       build-installer.yml fires when this run completes
-#                       builds the ISO from the leg's shared image
+#                       ci-surface-installer and their -rawhide forms --
+#                       each implies its leg's flag; build-installer.yml
+#                       fires when this run completes and builds the ISO
+#                       from the leg's shared image. No dx form: the
+#                       developer layer is something you rebase to, not
+#                       something anyone installs from bare metal
 #   *-disk              the flashable fp5 disk image -- the phone's
 #                       installer substitute: ci-fp5-disk and
 #                       ci-fp5-rawhide-disk, same shape, built by
@@ -111,7 +113,6 @@ jobs:
       surface: ${{ steps.plan.outputs.surface }}
       fp5: ${{ steps.plan.outputs.fp5 }}
       bluespin_installer: ${{ steps.plan.outputs.bluespin_installer }}
-      dx_installer: ${{ steps.plan.outputs.dx_installer }}
       surface_installer: ${{ steps.plan.outputs.surface_installer }}
       fp5_disk: ${{ steps.plan.outputs.fp5_disk }}
       base_runs: ${{ steps.plan.outputs.base_runs }}
@@ -132,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           bluespin='[]'; dx='[]'; surface='[]'; fp5='[]'
-          bluespin_installer='[]'; dx_installer='[]'
+          bluespin_installer='[]'
           surface_installer='[]'; fp5_disk='[]'
           base_runs='{}'
 
@@ -146,10 +147,10 @@ jobs:
             declare -A want=()
             for l in ci ci-rawhide ci-arm ci-arm-rawhide ci-dx ci-dx-rawhide \
                      ci-surface ci-surface-rawhide ci-fp5 ci-fp5-rawhide \
-                     ci-installer ci-arm-installer ci-dx-installer \
+                     ci-installer ci-arm-installer \
                      ci-surface-installer ci-fp5-disk \
                      ci-rawhide-installer ci-arm-rawhide-installer \
-                     ci-dx-rawhide-installer ci-surface-rawhide-installer \
+                     ci-surface-rawhide-installer \
                      ci-fp5-rawhide-disk; do
               has "$l" && want[$l]=1 || true
             done
@@ -158,12 +159,10 @@ jobs:
             # first, so their implied legs cascade too
             [[ -n "${want[ci-installer]:-}" ]] && want[ci]=1
             [[ -n "${want[ci-arm-installer]:-}" ]] && want[ci-arm]=1
-            [[ -n "${want[ci-dx-installer]:-}" ]] && want[ci-dx]=1
             [[ -n "${want[ci-surface-installer]:-}" ]] && want[ci-surface]=1
             [[ -n "${want[ci-fp5-disk]:-}" ]] && want[ci-fp5]=1
             [[ -n "${want[ci-rawhide-installer]:-}" ]] && want[ci-rawhide]=1
             [[ -n "${want[ci-arm-rawhide-installer]:-}" ]] && want[ci-arm-rawhide]=1
-            [[ -n "${want[ci-dx-rawhide-installer]:-}" ]] && want[ci-dx-rawhide]=1
             [[ -n "${want[ci-surface-rawhide-installer]:-}" ]] && want[ci-surface-rawhide]=1
             [[ -n "${want[ci-fp5-rawhide-disk]:-}" ]] && want[ci-fp5-rawhide]=1
             [[ -n "${want[ci-dx]:-}" ]] && want[ci]=1
@@ -186,12 +185,10 @@ jobs:
             [[ -n "${want[ci-fp5-rawhide]:-}" ]] && add fp5 '{"fedora_branch":"rawhide","arch":"arm64"}'
             [[ -n "${want[ci-installer]:-}" ]] && add bluespin_installer '"44-amd64"'
             [[ -n "${want[ci-arm-installer]:-}" ]] && add bluespin_installer '"45-arm64"'
-            [[ -n "${want[ci-dx-installer]:-}" ]] && add dx_installer '"44-amd64"'
             [[ -n "${want[ci-surface-installer]:-}" ]] && add surface_installer '"44-amd64"'
             [[ -n "${want[ci-fp5-disk]:-}" ]] && add fp5_disk '"45-arm64"'
             [[ -n "${want[ci-rawhide-installer]:-}" ]] && add bluespin_installer '"rawhide-amd64"'
             [[ -n "${want[ci-arm-rawhide-installer]:-}" ]] && add bluespin_installer '"rawhide-arm64"'
-            [[ -n "${want[ci-dx-rawhide-installer]:-}" ]] && add dx_installer '"rawhide-amd64"'
             [[ -n "${want[ci-surface-rawhide-installer]:-}" ]] && add surface_installer '"rawhide-amd64"'
             [[ -n "${want[ci-fp5-rawhide-disk]:-}" ]] && add fp5_disk '"rawhide-arm64"'
             true
@@ -240,8 +237,13 @@ jobs:
                 done < <(jq -c '.[]' <<< "${legs}")
                 legs="${out}"
               }
+              # dx builds no media of its own, so nothing can pull a
+              # covered dx leg back into this run. Read through filter's
+              # nameref, which shellcheck cannot see:
+              # shellcheck disable=SC2034
+              no_media='[]'
               filter bluespin bluespin bluespin_installer
-              filter dx bluespin-dx dx_installer
+              filter dx bluespin-dx no_media
               filter surface bluespin-surface surface_installer
               filter fp5 bluespin-fp5 fp5_disk
 
@@ -307,7 +309,6 @@ jobs:
             echo "surface=${surface}"
             echo "fp5=${fp5}"
             echo "bluespin_installer=${bluespin_installer}"
-            echo "dx_installer=${dx_installer}"
             echo "surface_installer=${surface_installer}"
             echo "fp5_disk=${fp5_disk}"
             echo "base_runs=${base_runs}"
@@ -322,14 +323,13 @@ jobs:
             --argjson surface "${surface}" \
             --argjson fp5 "${fp5}" \
             --argjson bluespin_installer "${bluespin_installer}" \
-            --argjson dx_installer "${dx_installer}" \
             --argjson surface_installer "${surface_installer}" \
             --argjson fp5_disk "${fp5_disk}" \
             --arg event "${EVENT}" \
             --arg pr "${PR_NUMBER}" \
             '{event: $event, pr: $pr,
               bluespin: $bluespin, dx: $dx, surface: $surface, fp5: $fp5,
-              bluespin_installer: $bluespin_installer, dx_installer: $dx_installer,
+              bluespin_installer: $bluespin_installer,
               surface_installer: $surface_installer, fp5_disk: $fp5_disk}' \
             > plan.json
           cat plan.json

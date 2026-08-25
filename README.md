@@ -37,7 +37,9 @@ pick a platform (`ci`, `ci-dx`, `ci-surface`, `ci-arm`, `ci-fp5` -- the
 phone is arm by nature), pick a branch (stable by default -- 44 on x86,
 45 on arm -- or the `-rawhide` form), and optionally ask for the leg's
 install medium (`-installer` for a live ISO, `-disk` for the phone's
-flashable image). Every flag implies exactly the legs it needs --
+flashable image). Everything but dx has an install medium: the
+developer layer is something you rebase to from a running bluespin, not
+something anyone installs onto bare metal. Every flag implies exactly the legs it needs --
 `ci-fp5-rawhide-disk` alone builds the rawhide arm bluespin, the rawhide
 phone on top of it, and the flashable artifact. Attaching a label starts
 the widened run immediately. The full table lives in
@@ -108,8 +110,8 @@ log, and both work with Secure Boot disabled.
 ## Installing
 
 Install media live on [GitHub releases](https://github.com/LorbusChris/bluespin/releases):
-publishing a release builds the live installer ISOs (x86, and the
-generic aarch64 image's installer) and the Fairphone 5 flashable disk
+publishing a release builds the live installer ISOs (bluespin on x86
+and aarch64, and bluespin-surface) and the Fairphone 5 flashable disk
 image, and attaches them there. The daily builds publish only the OCI
 images below -- existing installs update from those; nobody reinstalls
 to update.
