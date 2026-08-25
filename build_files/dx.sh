@@ -13,17 +13,36 @@
 set -xeuo pipefail
 
 DX_PACKAGES=(
-    # Virtualisation
+    # Virtualisation. Deliberately no `qemu` and no `libvirt`: both are
+    # metapackages that drag in every architecture's emulator and every
+    # hypervisor and storage driver -- Xen, LXC and the gluster/rbd/iscsi
+    # cluster backends included, none of which a desktop KVM host runs.
+    # What one does run is spelled out instead: the x86 KVM core, the
+    # spice/virtio pieces the tools below actually drive, and libvirt's
+    # qemu driver with the dir/disk storage backends. The matching
+    # --exclude on the install below keeps virt-manager's recommend of
+    # the fat metas from undoing this.
     edk2-ovmf
-    libvirt
+    gtksourceview4 # virt-manager's XML editor (its recommend)
+    libvirt-client
+    libvirt-daemon
+    libvirt-daemon-config-network
+    libvirt-daemon-driver-interface
+    libvirt-daemon-driver-network
+    libvirt-daemon-driver-nodedev
+    libvirt-daemon-driver-nwfilter
+    libvirt-daemon-driver-qemu
+    libvirt-daemon-driver-secret
+    libvirt-daemon-driver-storage-core
     libvirt-nss
-    qemu
+    qemu-audio-spice
     qemu-char-spice
     qemu-device-display-virtio-gpu
     qemu-device-display-virtio-vga
     qemu-device-usb-redirect
     qemu-img
     qemu-system-x86-core
+    qemu-ui-spice-core
     qemu-user-binfmt
     qemu-user-static
     virt-manager
@@ -96,7 +115,15 @@ DX_PACKAGES=(
     cascadia-code-fonts
 )
 
-dnf -y install "${DX_PACKAGES[@]}"
+# --exclude: virt-manager Recommends (libvirt-daemon-kvm or
+# libvirt-daemon-qemu), and either alternative re-imports the meta world
+# the list above exists to avoid (the full storage-driver set, gluster
+# included, and libvirt-daemon-qemu even requires the bare qemu meta).
+# Excluded, the weak dependency is unsatisfiable and dnf skips it.
+dnf -y install \
+    --exclude=libvirt-daemon-kvm \
+    --exclude=libvirt-daemon-qemu \
+    "${DX_PACKAGES[@]}"
 
 # ROCm does not play well with the nvidia driver; this image has no nvidia
 # variant today, but keep the guard so adding one does not break it
