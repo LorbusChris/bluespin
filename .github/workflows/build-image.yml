@@ -165,11 +165,20 @@ jobs:
             scan oci-archive:/image.oci \
             -o spdx-json=/out/sbom.full.json \
             -o syft-json=/out/sbom.syft.full.json
+          # externalRefs: keep each package's purl, drop syft's generated
+          # CPE guesses -- they are heuristic, every serious consumer keys
+          # on the purl, and on the dx image they alone were ~9 MB: the
+          # difference between an attestation Rekor accepts and the 502
+          # its gateway returns above roughly 32 MiB on the wire (bluespin
+          # at ~29 MB passed, dx at ~38 MB failed, same day same code).
           jq '
             .files = []
             | ([.SPDXID] + (.packages | map(.SPDXID)) | map({(.): true}) | add) as $keep
             | .relationships = [.relationships[]
                 | select($keep[.spdxElementId] and $keep[.relatedSpdxElement])]
+            | .packages = [.packages[]
+                | if .externalRefs then .externalRefs = [.externalRefs[] | select(.referenceType == "purl")] else . end
+                | if .externalRefs == [] then del(.externalRefs) else . end]
           ' sbom.full.json > sbom.spdx.json
           jq '.files = []' sbom.syft.full.json > sbom.syft.json
           rm -f /tmp/image.oci sbom.full.json sbom.syft.full.json
