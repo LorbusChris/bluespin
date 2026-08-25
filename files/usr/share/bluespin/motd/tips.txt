@@ -1,0 +1,12 @@
+# One tip per line; bluespin-motd shows one at random. Blank lines and
+# # comments are ignored.
+Alt+Tab switches windows, Super+Tab switches applications.
+Ctrl+. opens a console in the current folder from Files.
+Ctrl+Shift+Esc opens Mission Center.
+Super+Space opens Search Light.
+Super+. opens the Smile emoji picker.
+`ujust enroll-secureboot-key` lets the signed kernel and virtual camera load with Secure Boot on.
+`bootc rollback` undoes the last update.
+`ujust install-flatpaks` adds the opt-in extra or dx app sets, per user.
+`ujust distrobox-assemble` creates ready-made Arch, Debian or Fedora containers.
+`ujust setup-luks-tpm-unlock` unlocks full-disk encryption with the TPM.
