@@ -140,7 +140,7 @@ so nothing rebuilds:
 
 ```bash
 gh release create 45.0 --prerelease --generate-notes --title "bluespin 45.0"
-# wait for the "Build Bluespin ISOs" and "Build Bluespin FP5 disk image"
+# wait for the "Build Installer" and "Build Disk"
 # runs to attach their assets; re-run a failed leg (re-runs overwrite
 # their assets), then:
 gh release edit 45.0 --prerelease=false --latest
@@ -420,6 +420,6 @@ Live installer ISOs are built with
 published images — the same mechanism Bluefin and Bazzite use. Publishing
 a release builds them onto that release (see [Cutting a
 release](#cutting-a-release)); a hand-dispatch of the
-[`Build Bluespin ISOs`](.github/workflows/build-installer.yml) workflow
+[`Build Installer`](.github/workflows/build-installer.yml) workflow
 names any image tag and produces the same ISOs (with checksums) as
 workflow artifacts only.

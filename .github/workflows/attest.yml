@@ -7,11 +7,11 @@
 # leg's SBOM artifact, and attests it onto that leg's published digest.
 # Pull requests publish nothing to attest onto, so their scan runs end
 # here.
-name: Attest Bluespin SBOMs
+name: Attest
 on:
   workflow_run:
     workflows:
-      - Scan Bluespin images
+      - Scan
     types:
       - completed
 

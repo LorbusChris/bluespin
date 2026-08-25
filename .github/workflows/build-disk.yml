@@ -11,7 +11,7 @@
 # gets a disk image: a 44 release skips this with a notice instead of
 # attaching a 45 phone image to it. Pull requests do not come through
 # here: a PR has no published tag to pull.
-name: Build Bluespin FP5 disk image
+name: Build Disk
 on:
   release:
     types:
@@ -21,7 +21,7 @@ on:
   # to build the flashable image from it
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
   workflow_dispatch:

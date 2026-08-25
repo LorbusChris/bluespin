@@ -19,7 +19,7 @@
 # then promote -- promotion fires no `published` event, so nothing
 # rebuilds. Re-runs overwrite their assets, so a failed leg is a
 # re-run, not a new release.
-name: Build Bluespin ISOs
+name: Build Installer
 on:
   release:
     types:
@@ -29,7 +29,7 @@ on:
   # to build the ISO from it -- no media pipeline lives in a build leg
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
   workflow_dispatch:

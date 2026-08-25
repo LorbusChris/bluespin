@@ -59,7 +59,7 @@
 # `latest` and the dated tags it always had. Each branch's base is pinned in
 # bluespin.env. A dispatch can name the branches to build, which is how a
 # leg that is not in the regular list gets built by hand.
-name: Build Bluespin container image
+name: Build
 on:
   pull_request:
     branches:

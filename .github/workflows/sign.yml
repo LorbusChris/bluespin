@@ -10,11 +10,11 @@
 # Runs even when the build run partially failed: the legs that DID
 # publish must not stay unsigned, so every tag is resolved individually
 # and a missing one is a warning, not a failure.
-name: Sign Bluespin images
+name: Sign
 on:
   workflow_run:
     workflows:
-      - Build Bluespin container image
+      - Build
     types:
       - completed
 
