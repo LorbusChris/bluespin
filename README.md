@@ -129,9 +129,10 @@ signature-verified on-device. To verify manually:
 cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 ```
 
-Every floating bluespin tag -- `44`, `45`, `rawhide`, `latest` and
-their dated aliases -- serves a manifest index, multi-arch (x86_64 +
-aarch64) on 45, arm's stable branch. The per-arch images and the index
+Every floating bluespin tag -- `44`, `45`, `latest`, their dated
+aliases, and `rawhide` once an on-demand build has published it --
+serves a manifest index, multi-arch (x86_64 + aarch64) on 45, arm's
+stable branch. The per-arch images and the index
 over them are each cosign-signed -- verification holds whether a client
 resolves the index or an instance -- and `bootc switch` on an aarch64
 UEFI machine simply gets the arm image.
