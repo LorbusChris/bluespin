@@ -180,7 +180,15 @@ jobs:
                 | if .externalRefs then .externalRefs = [.externalRefs[] | select(.referenceType == "purl")] else . end
                 | if .externalRefs == [] then del(.externalRefs) else . end]
           ' sbom.full.json > sbom.spdx.json
-          jq '.files = []' sbom.syft.full.json > sbom.syft.json
+          # Same discipline as the SPDX above: stripping the files must
+          # take every relationship that referenced them along, or grype's
+          # decoder warns once per dangling reference (hundreds per image)
+          jq '
+            .files = []
+            | ([.source.id] + [.artifacts[].id] | map({(.): true}) | add) as $keep
+            | .artifactRelationships = [.artifactRelationships[]
+                | select($keep[.parent] and $keep[.child])]
+          ' sbom.syft.full.json > sbom.syft.json
           rm -f /tmp/image.oci sbom.full.json sbom.syft.full.json
 
       - name: Upload SBOM artifact
