@@ -2,6 +2,10 @@
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
     'config:best-practices',
+    // One PR carrying every pending update, not one per dependency. The
+    // no-automerge rules below still hold: a grouped PR that contains any
+    // human-gated bump simply waits for the human.
+    'group:all',
   ],
   rebaseWhen: 'never',
   // One submodule remains: kmods/v4l2loopback. Renovate's submodule manager
@@ -114,6 +118,23 @@
     },
   ],
   packageRules: [
+    {
+      // The per-branch base pins: the tag IS the Fedora branch, fixed by
+      // the variable it lives in -- FEDORA_44_BASE_IMAGE stays :44
+      // forever. Only the digest may move. Without this, Renovate
+      // "upgrades" the 44 tag to 45 and mangles the variable into a
+      // duplicate of the 45 pin (PR #71).
+      description: 'Base image tags are branch names, not versions -- digests only',
+      matchPackageNames: [
+        'quay.io/fedora-ostree-desktops/silverblue',
+      ],
+      matchUpdateTypes: [
+        'major',
+        'minor',
+        'patch',
+      ],
+      enabled: false,
+    },
     {
       // A pinned extension is only safe to bump if it still declares the
       // shell we ship -- the build asserts exactly that, so let CI be the
