@@ -466,19 +466,16 @@ if [[ "${IMAGE_NAME}" == "bluespin-surface" ]]; then
     # only; its iptsd links libspdlog.so.1.15, which 45 and later no longer
     # ship -- and one source for every branch beats two.
     #
-    # NOTE: libwacom-surface{,-data} is deliberately NOT swapped in. It is not merely
-    # inconvenient on F44, it is uninstallable:
-    #   - libwacom-surface (2.17) provides symbol versions up to LIBWACOM_2.15, but F44's
-    #     libinput requires LIBWACOM_2.18 -> dnf "resolves" this by erasing libinput+GNOME.
-    #   - libwacom-surface-data provides an *unversioned* libwacom-data, which cannot
-    #     satisfy F44 libwacom's strict `Requires: libwacom-data = 2.19.0-1.fc44`.
-    # Backporting just the .tablet files doesn't work either: modern Surface entries use
-    # `virt|` and `mei|` DeviceMatch bus types that only the forked library understands;
-    # stock libwacom rejects them as invalid.
-    # Cost of omitting: GNOME loses pen-display metadata for Surface Pro 4+/Book/Laptop
-    # Studio (stock libwacom only knows Surface Go/Go 2). Pen and touch input themselves
-    # still work via iptsd + libinput's generic tablet handling.
-    # Restore the swap once linux-surface publishes builds against libwacom 2.19.
+    # libwacom is upgraded below inside the same COPR window. linux-surface's
+    # own published libwacom-surface (2.17) is uninstallable here -- symbol
+    # versions older than libinput requires, an unversioned -data provides --
+    # and stock libwacom cannot express the Surface entries at all: it
+    # rejects their virt|/mei| DeviceMatch and never maps BUS_VIRTUAL
+    # devices, so iptsd's pen devices stay unmatched and GNOME loses
+    # pen-display metadata past the Surface Go. So the COPR builds Fedora's
+    # own libwacom spec with the linux-surface patches on top
+    # (pocketblue-packages surface/libwacom) and it version-wins over stock,
+    # the same way the kernel does.
     #
     # Secure Boot: the COPR signs the kernel image with Red Hat's test keys,
     # which shim does not trust, so it is re-signed below with our own MOK
@@ -535,11 +532,42 @@ EOF
     # Install Kernel + touch daemon. Enable/install/disable so the COPR is not
     # left active in the shipped image; enabled alongside Fedora's repos rather
     # than --repo, which would hide iptsd's Fedora dependencies (cairomm, ...)
-    # from the resolver -- the COPR kernel wins on version, not on exclusivity.
+    # from the resolver. The kernel is installed at the EXACT EVR the
+    # kernel-builder stage resolved and recorded -- never "the newest":
+    # on a rawhide-content base a mainline rc (7.3-rc0) overtakes the
+    # surface rebase (7.2.x), and newest-wins would quietly ship the stock
+    # kernel with a module built for another one. libwacom gets the same
+    # exact-EVR treatment from the same COPR.
     dnf -y copr enable @mobility/surface
+    kevr="$(cat /kernel-out/kver)"
+    kevr="${kevr%.*}"
     dnf -y install --setopt=disable_excludes=* \
-        kernel iptsd
+        "kernel-${kevr}" \
+        "kernel-core-${kevr}" \
+        "kernel-modules-${kevr}" \
+        "kernel-modules-core-${kevr}" \
+        "kernel-modules-extra-${kevr}" \
+        iptsd
+    wacom_evr="$(dnf -q repoquery --qf '%{VERSION}-%{RELEASE}\n' \
+        --disablerepo='*' \
+        --enablerepo='copr:copr.fedorainfracloud.org:group_mobility:surface' \
+        libwacom | sort -V | tail -1)"
+    if [[ -z "${wacom_evr}" ]]; then
+        echo "the @mobility/surface COPR has no libwacom for this branch" >&2
+        exit 1
+    fi
+    # allow_vendor_change: replacing Fedora's libwacom with the COPR build
+    # IS a vendor change, which newer dnf5 blocks by default -- silently for
+    # `upgrade` ("Nothing to do"), loudly for install. The kernel above only
+    # sidesteps this because the stock one is erased first.
+    dnf -y install --setopt=allow_vendor_change=true \
+        "libwacom-${wacom_evr}" "libwacom-data-${wacom_evr}"
     dnf -y copr disable @mobility/surface
+
+    # Fail loudly if stock won the libwacom version race (Fedora bumped it
+    # and the COPR has not rebuilt yet) rather than quietly ship a surface
+    # image without pen metadata.
+    rpm -q libwacom --qf '%{RELEASE}' | grep -q '\.surface'
 
     # Pin what we just chose: without the lock, anything resolving kernel
     # afterwards could pull Fedora's build back in over the COPR's.
