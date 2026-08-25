@@ -156,6 +156,19 @@ fi
 
 
 # The v4l2loopback module for THIS kernel, from the surface flavor of the
-# kernel-builder stage (the bluespin layer installed the stock-kernel build,
-# which left with the erased kernel above).
+# kernel-builder stage. The bluespin layer installed the stock-kernel
+# build, and erasing that kernel did NOT take it with it: the .ko.xz is
+# ours, not rpm's, so it stayed behind in a module tree whose kernel is
+# gone -- together with the depmod output, which rpm does not own either.
 install_v4l2loopback_artifacts
+
+# So sweep what the erase left: a module tree with no vmlinuz is not a
+# kernel, it is the shadow of one. Nothing boots it, `bootc container
+# lint` does not mind it, and it went unnoticed until the live layer's
+# kernel selection tripped over the surface image having two trees.
+for tree in /usr/lib/modules/*/; do
+    if [[ ! -f "${tree}vmlinuz" ]]; then
+        echo "removing orphaned module tree ${tree} (no kernel in it)"
+        rm -rf "${tree}"
+    fi
+done

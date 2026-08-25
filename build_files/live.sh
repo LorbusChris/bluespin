@@ -48,12 +48,17 @@ esac
 dnf -y install "${live_packages[@]}"
 
 # The shipping initramfs boots a disk; this one has to boot the squashfs
-# the ISO carries. Exactly one kernel is expected -- surface swaps its
-# kernel, fp5 never comes through here -- and a second one would silently
-# leave the ISO booting the wrong initramfs.
-mapfile -t kernels < <(ls -1 /usr/lib/modules)
+# the ISO carries. The kernel to build it for is the one that can boot at
+# all -- the tree carrying a vmlinuz, which is also the one titanoboa
+# copies onto the ISO. A module tree without one is not a kernel: erasing
+# a kernel RPM leaves its depmod output behind, so the surface image has
+# a second tree that nothing can boot. Two bootable kernels would be a
+# real ambiguity, and worth stopping for.
+mapfile -t kernels < <(cd /usr/lib/modules && for tree in */; do
+    [[ -f "${tree}vmlinuz" ]] && echo "${tree%/}"
+done)
 if [[ "${#kernels[@]}" -ne 1 ]]; then
-    echo "expected exactly one kernel in /usr/lib/modules, found: ${kernels[*]}" >&2
+    echo "expected exactly one bootable kernel in /usr/lib/modules, found: ${kernels[*]:-none}" >&2
     exit 1
 fi
 kernel="${kernels[0]}"
