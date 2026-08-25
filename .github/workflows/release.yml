@@ -1,96 +1,120 @@
 ---
-# One click from the Actions tab to a released branch: pick 44, 45 or
-# rawhide, and this cuts a pre-release tagged <branch>.N, builds its
-# install media onto it, and promotes it to a full release only when
-# every media job is green -- the README's "Cutting a release" flow as
-# a single dispatch.
+# One click from the Actions tab to a released channel: pick latest,
+# next or rolling, and this cuts a DRAFT release tagged
+# <branch>.<date>.<serial> (45.20260825.1), builds the channel's entire
+# media set onto it, and publishes it only when every media job is
+# green. Nothing is visible until then; a failed run leaves only an
+# invisible draft, which holds no tag.
+#
+# The channels follow Fedora's lifecycle, resolved through bluespin.env:
+# latest is the stable branch and publishes as a full release, marked
+# latest; next is the branched pre-release and publishes as a (beta)
+# pre-release; rolling is rawhide and publishes as an (alpha)
+# pre-release -- the last two stay pre-releases forever, that is their
+# grade, not a pending promotion. Which media a channel gets is the
+# registry's call (a 44 release gets no arm ISO while stable has no arm
+# image; that condition retires when stable switches to 45), and a
+# rolling release fails visibly until on-demand builds have published
+# rawhide's images.
 #
 # The ordering cannot use the release event, and does not want to: a
 # release created with the workflow's own GITHUB_TOKEN fires no
 # `published` event (GitHub's recursion guard), so the media workflows
 # are invoked directly as reusable workflows -- and the same guard
-# conveniently keeps the pre-release from triggering them a second
-# time. The release is marked latest on promotion only when its branch
-# is bluespin.env's default.
+# keeps the publish step from triggering them a second time.
 #
-# A failed run leaves the pre-release in place with whatever assets
-# made it. Re-run the failed jobs -- uploads overwrite, and promotion
-# happens once everything is green -- or delete the pre-release and
-# its tag, and dispatch anew.
+# A failed run leaves the draft in place with whatever assets made it.
+# Re-run the failed jobs -- uploads overwrite, and publication happens
+# once everything is green -- or delete the draft and dispatch anew.
 name: Release
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Fedora branch to release'
+      channel:
+        description: 'release channel'
         type: choice
         options:
-          - '44'
-          - '45'
-          - 'rawhide'
-        default: '44'
+          - 'latest'
+          - 'next'
+          - 'rolling'
+        default: 'latest'
 
 concurrency:
-  # Serialize releases of one branch; different branches may overlap.
+  # Serialize releases of one channel; different channels may overlap.
   # Never cancel: a half-cut release is worse than a queued one.
-  group: release-${{ inputs.branch }}
+  group: release-${{ inputs.channel }}
   cancel-in-progress: false
 
 jobs:
   cut:
-    name: cut pre-release
+    name: cut draft release
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
       tag: ${{ steps.cut.outputs.tag }}
       release_id: ${{ steps.cut.outputs.release_id }}
+      branch: ${{ steps.cut.outputs.branch }}
       make_latest: ${{ steps.cut.outputs.make_latest }}
     steps:
-      # For bluespin.env, which knows the default branch
+      # For bluespin.env, which knows the channels' branches
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Cut the pre-release
+      - name: Cut the draft release
         id: cut
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ inputs.branch }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
-          # The next free <branch>.N, counted over every release ever
-          # cut -- a tag once used stays used, even by a deleted or
-          # never-promoted release's leftovers
+          source bluespin.env
+          case "${CHANNEL}" in
+            latest)
+              branch="${DEFAULT_FEDORA_BRANCH}"
+              prerelease=false make_latest=true grade=""
+              ;;
+            next)
+              branch="${NEXT_FEDORA_BRANCH}"
+              prerelease=true make_latest=false grade=" (beta)"
+              ;;
+            rolling)
+              branch="rawhide"
+              prerelease=true make_latest=false grade=" (alpha)"
+              ;;
+          esac
+
+          # <branch>.<date>.<serial>, the serial counting today's cuts
+          # of this branch over every release ever made, drafts included
+          DATE="$(date +%Y%m%d)"
           n="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate \
               --jq '.[].tag_name' \
-            | { grep -E "^${BRANCH}\.[0-9]+$" || true; } \
-            | sed "s/^${BRANCH}\.//" | sort -n | tail -1)"
-          tag="${BRANCH}.$(( ${n:--1} + 1 ))"
+            | { grep -E "^${branch}\.${DATE}\.[0-9]+$" || true; } \
+            | sed "s/^${branch}\.${DATE}\.//" | sort -n | tail -1)"
+          tag="${branch}.${DATE}.$(( ${n:-0} + 1 ))"
 
-          source bluespin.env
-          make_latest=false
-          if [[ "${BRANCH}" == "${DEFAULT_FEDORA_BRANCH}" ]]; then
-            make_latest=true
-          fi
-
-          # Created through the API to get the id back in one call;
-          # the tag lands on the default branch's HEAD
+          # Created through the API to get the id back in one call. A
+          # draft holds no tag yet; publication below creates it, pinned
+          # here to the dispatched commit.
           release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
             -f tag_name="${tag}" \
-            -f name="bluespin ${tag}" \
-            -F prerelease=true \
+            -f target_commitish="${GITHUB_SHA}" \
+            -f name="bluespin ${tag}${grade}" \
+            -F draft=true \
+            -F prerelease="${prerelease}" \
             -F generate_release_notes=true \
             --jq '.id')"
-          echo "cut pre-release ${tag} (${release_id})"
+          echo "cut draft ${tag}${grade} (${release_id}) for branch ${branch}"
 
           {
             echo "tag=${tag}"
             echo "release_id=${release_id}"
+            echo "branch=${branch}"
             echo "make_latest=${make_latest}"
           } >> "$GITHUB_OUTPUT"
 
-  # The called jobs upload straight onto the pre-release. The grants
-  # here must cover every permission the called workflows' jobs declare
+  # The called jobs upload straight onto the draft. The grants here
+  # must cover every permission the called workflows' jobs declare
   # (their skipped PR-path jobs included), or the calls startup-fail.
   installer:
     name: installer media
@@ -101,7 +125,7 @@ jobs:
       statuses: write
     uses: ./.github/workflows/build-installer.yml
     with:
-      tag: ${{ inputs.branch }}
+      tag: ${{ needs.cut.outputs.branch }}
       release_id: ${{ needs.cut.outputs.release_id }}
 
   disk:
@@ -113,11 +137,11 @@ jobs:
       statuses: write
     uses: ./.github/workflows/build-disk.yml
     with:
-      tag: ${{ inputs.branch }}
+      tag: ${{ needs.cut.outputs.branch }}
       release_id: ${{ needs.cut.outputs.release_id }}
 
-  promote:
-    name: promote on green
+  publish:
+    name: publish on green
     needs:
       - cut
       - installer
@@ -126,7 +150,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Promote to release
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.cut.outputs.tag }}
@@ -134,8 +158,10 @@ jobs:
           MAKE_LATEST: ${{ needs.cut.outputs.make_latest }}
         run: |
           set -euo pipefail
+          # The prerelease grade was set at the cut; this only makes the
+          # draft public and lets the stable channel claim latest
           gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
-            -F prerelease=false \
+            -F draft=false \
             -f make_latest="${MAKE_LATEST}" \
             --jq '.html_url'
-          echo "promoted ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "published ${TAG}" >> "$GITHUB_STEP_SUMMARY"

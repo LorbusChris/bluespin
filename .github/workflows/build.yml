@@ -8,7 +8,8 @@
 # fp5 device layer builds FROM exactly as dx and surface build FROM the
 # amd64 instance), dx and surface on 44 and 45, fp5 on 45. Rawhide is in
 # no default matrix: its legs are opt-in, by ci label on a pull request
-# or by dispatch. Every floating bluespin tag -- 44, 45, latest, the
+# or by dispatch. Every floating bluespin tag -- the branches 44 and
+# 45, the channels latest/next/rolling (stable, branched, rawhide), the
 # dated aliases, and rawhide once an on-demand build has published it
 # -- serves a manifest index, multi-arch on 45.
 #
@@ -450,10 +451,18 @@ jobs:
             digest=$(< /tmp/digestfile)
 
             # The same floating aliases the amd64 leg used to own, now
-            # pointing at the index; latest travels with the default branch
+            # pointing at the index. The channel aliases follow Fedora's
+            # lifecycle: latest travels with the default (stable) branch,
+            # next with the branched pre-release, rolling with rawhide.
             aliases=("${branch}-${DATE}")
             if [[ "${branch}" == "${DEFAULT_FEDORA_BRANCH}" ]]; then
               aliases+=("latest" "latest-${DATE}" "${DATE}")
+            fi
+            if [[ "${branch}" == "${NEXT_FEDORA_BRANCH}" ]]; then
+              aliases+=("next" "next-${DATE}")
+            fi
+            if [[ "${branch}" == "rawhide" ]]; then
+              aliases+=("rolling" "rolling-${DATE}")
             fi
             for tag in "${aliases[@]}"; do
               # --all: copy the index together with the instances it references
