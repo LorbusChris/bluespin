@@ -3,11 +3,12 @@
 #
 # Run the command up to <tries> times, sleeping <pause> seconds between
 # attempts. For commands whose failures are usually someone else's bad
-# minute -- cosign talking to rekor.sigstore.dev, mostly: the public
-# Rekor 502s now and then, cosign's own retry gives up after two tries
-# seconds apart, and all three bluespin legs of the first main run failed
-# in one such window. Three tries thirty seconds apart outlast a gateway
-# blip without masking a real outage.
+# minute -- cosign talking to rekor.sigstore.dev, mostly, whose own retry
+# gives up after two tries seconds apart. Three tries thirty seconds
+# apart outlast a gateway blip without masking a real outage. (What this
+# canNOT fix: a deterministic rejection. The 2026-08-25 attest failures
+# retried identically forever because the payload itself was too big --
+# see the Generate SBOM step in build-image.yml.)
 set -uo pipefail
 
 tries=$1
