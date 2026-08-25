@@ -105,6 +105,7 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
         bluespin) BUILD_ARGS+=("--target" "bluespin") ;;
         bluespin-dx) BUILD_ARGS+=("--target" "dx") ;;
         bluespin-surface) BUILD_ARGS+=("--target" "surface") ;;
+        bluespin-fp5) BUILD_ARGS+=("--target" "fp5") ;;
         *)
             echo "no Containerfile stage for platform '${target_image##*/}'" >&2
             exit 1

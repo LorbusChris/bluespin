@@ -134,16 +134,21 @@ fetch_pinned() {
 # on the shell the image ships -- see assert_enabled_extensions.
 #
 #   every platform        AppIndicator, Bazaar Companion, Caffeine,
-#                         Gradia Capture, Network Displays, Search Light
-#   bluespin, dx, surface Weather or Not
+#                         Gradia Capture, Network Displays
+#   bluespin, dx, surface Search Light, Weather or Not
 #   bluespin-dx           System Monitor, Mosaic WM
-#   bluespin-fp5          NekoTorch (the one device with a torch LED) --
-#                         the platform arrives with #57
+#   bluespin-fp5          NekoTorch (the one device with a torch LED)
+#
+# The two desktop-only rows are what a phone cannot use: Search Light is a
+# centred overlay bound to a keyboard shortcut on a device with no
+# keyboard, and Weather or Not renders next to the clock on a portrait
+# status bar with no room. Both stay installed -- one toggle away.
 #
 # Screen Rotate stays installed everywhere but enabled nowhere for now:
 # Fedora's RPM trails the shell (no GNOME 51 declaration), and an enabled
 # extension that cannot load is a warning on every 51 leg. Re-enable on
-# surface and fp5 once the RPM declares the shell we ship.
+# surface and fp5 once the RPM declares the shell we ship (the mobile
+# shell rotates natively meanwhile).
 #
 # Installed but enabled nowhere by default stays installed: anything in
 # VENDORED_EXTENSIONS a platform does not enable is one toggle away.
@@ -155,11 +160,13 @@ enabled_extensions_for_platform() {
         caffeine@patapon.info
         gradia-integration@alexandervanhee.github.io
         network-displays@gnome.org
-        search-light@icedman.github.com
     )
     case "${platform}" in
         bluespin | bluespin-dx | bluespin-surface)
-            enabled+=(weatherornot@somepaulo.github.io)
+            enabled+=(
+                search-light@icedman.github.com
+                weatherornot@somepaulo.github.io
+            )
             ;;
     esac
     case "${platform}" in

@@ -14,6 +14,7 @@ ones live in [docs/desktop-defaults.md](docs/desktop-defaults.md).
 | `ghcr.io/lorbuschris/bluespin` | Fedora Silverblue plus full multimedia, curated GNOME apps, shell extensions and desktop defaults |
 | `ghcr.io/lorbuschris/bluespin-dx` | Adds the developer layer ([dx.sh](build_files/dx.sh)): virtualisation, containers, tracing and packaging tools |
 | `ghcr.io/lorbuschris/bluespin-surface` | Replaces the kernel with a [linux-surface](https://github.com/linux-surface/linux-surface)-patched kernel + `iptsd`, built in our [@mobility/surface](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/) COPR, for Microsoft Surface devices |
+| `ghcr.io/lorbuschris/bluespin-fp5` | The phone (aarch64): the [pocketblue](https://github.com/pocketblue/pocketblue) device layer for the Fairphone 5, the [@mobility/gnome-mobile](https://copr.fedorainfracloud.org/coprs/g/mobility/gnome-mobile/) shell and the [@mobility/sc7280](https://copr.fedorainfracloud.org/coprs/g/mobility/sc7280/) kernel, plus telephony ([fp5.sh](build_files/fp5.sh)) |
 
 Each platform is built per Fedora branch, and the branch is the tag:
 `bluespin:44`, `bluespin-dx:rawhide`. `latest` is an alias for the default
@@ -182,9 +183,10 @@ in [extensions.sh](build_files/extensions.sh), rendered into
 
 | Enabled on | Extensions |
 | --- | --- |
-| every platform | AppIndicator, Bazaar Companion, Caffeine, Gradia Capture, Network Displays, Search Light |
-| `bluespin`, `bluespin-dx`, `bluespin-surface` | Weather or Not |
+| every platform | AppIndicator, Bazaar Companion, Caffeine, Gradia Capture, Network Displays |
+| `bluespin`, `bluespin-dx`, `bluespin-surface` | Search Light, Weather or Not (both need a keyboard or a landscape bar the phone lacks) |
 | `bluespin-dx` | System Monitor, Mosaic WM |
+| `bluespin-fp5` | NekoTorch (the one device with a torch LED) |
 
 Screen Rotate ships installed on every platform but is enabled nowhere for
 now: Fedora's RPM does not yet declare GNOME 51, and an enabled extension
@@ -262,6 +264,7 @@ Requires `just` and `podman`.
 ```bash
 just build bluespin              # the default branch; or bluespin-dx / bluespin-surface
 just build bluespin-dx rawhide   # any platform on any branch in bluespin.env
+just build bluespin-fp5 45 arm64 # the phone; cross-builds via qemu-user-static
 NO_CACHE=1 just build bluespin   # force a full rebuild (see the caveat below)
 just rechunk bluespin 44         # optional: split into update-friendly layers
 ```
@@ -272,6 +275,7 @@ layered family selected by `--target`:
 ```
 base (Silverblue) → bluespin → dx
                              → surface
+                             → fp5 (aarch64)
 ```
 
 [build.sh](build_files/build.sh) builds the **bluespin** layer — everything
@@ -279,9 +283,13 @@ the platforms share, with
 [silverblue_base.sh](build_files/silverblue_base.sh) supplying what a plain
 Silverblue base lacks (the updater, ujust, Flathub and the preinstall
 service, the multimedia stack). The variants are thin deltas on top:
-[dx.sh](build_files/dx.sh) or [surface.sh](build_files/surface.sh), then a
+[dx.sh](build_files/dx.sh), [surface.sh](build_files/surface.sh) or
+[fp5.sh](build_files/fp5.sh), then a
 shared [variant-finish.sh](build_files/variant-finish.sh) that stamps the
-variant's identity and per-platform desktop/extension set. Two throwaway
+variant's identity and per-platform desktop/extension set. The fp5 layer
+works because the `bluespin.env` base pins are multi-arch OCI indexes: the
+same pinned digest resolves to aarch64, so the phone builds the very same
+bluespin stage on its architecture. Two throwaway
 **kernel-builder** flavors (stock and surface) do everything that must
 install tooling in order to build something — gcc and kernel-devel for the
 v4l2loopback module, sbsigntools for the surface vmlinuz — and are the only

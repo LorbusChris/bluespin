@@ -2,6 +2,7 @@
 #
 #   base (Fedora Silverblue) -> bluespin -> dx
 #                                        -> surface
+#                                        -> fp5 (aarch64)
 #
 # Every platform is built per Fedora branch; the branch's base comes in as
 # BASE_IMAGE from bluespin.env (digests pinned in one place, Renovate
@@ -22,6 +23,7 @@ FROM scratch AS ctx
 COPY /build_files /build_files
 COPY /files /files
 COPY /kmods /kmods
+COPY /devices /devices
 COPY /cosign.pub /cosign.pub
 
 # Base Image
@@ -108,5 +110,23 @@ RUN --mount=type=cache,dst=/var/cache/libdnf5 \
     --mount=type=bind,from=kernel-builder-surface,source=/out,target=/kernel-out \
     /ctx/build_files/surface.sh && \
     /ctx/build_files/variant-finish.sh bluespin-surface
+
+RUN bootc container lint
+
+# The phone variant: Fairphone 5 (SC7280/QCM6490, aarch64) -- the device
+# layer from pocketblue plus the mobile shell, layered on the very same
+# bluespin image as dx and surface. The bluespin.env base pins are
+# multi-arch OCI indexes, so the same digest serves this architecture;
+# build with `just build bluespin-fp5 45 arm64` (or natively on arm64).
+FROM ${BLUESPIN_IMAGE} AS fp5
+
+ARG IMAGE_NAME=bluespin-fp5
+ARG FEDORA_BRANCH
+
+RUN --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=bind,from=ctx,source=/,target=/ctx \
+    /ctx/build_files/fp5.sh && \
+    /ctx/build_files/variant-finish.sh bluespin-fp5
 
 RUN bootc container lint

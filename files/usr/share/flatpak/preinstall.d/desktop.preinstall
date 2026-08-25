@@ -3,7 +3,7 @@
 # /usr/share/bluespin/flatpaks (`ujust install-flatpaks`).
 # NOTE: flatpak-preinstall tracks these entries; removing an entry later
 # uninstalls that app from users' systems. Remove deliberately.
-# bluespin-arches: x86_64
+# bluespin-arches: x86_64 aarch64
 [Flatpak Preinstall app.drey.Dialect]
 Branch=stable
 IsRuntime=false
