@@ -505,6 +505,7 @@ jobs:
       platform: bluespin-dx
       fedora_branch: ${{ matrix.fedora_branch }}
       image_desc: "Bluespin DX"
+      pr_installer_image: ${{ contains(fromJSON(needs.plan.outputs.dx_installer), format('{0}-{1}', matrix.fedora_branch, matrix.arch)) }}
       from_bluespin: true
       # The branch tag serves yesterday's index until the manifest job
       # finishes; the -amd64 instance tag is fresh the moment the
@@ -534,6 +535,7 @@ jobs:
       platform: bluespin-surface
       fedora_branch: ${{ matrix.fedora_branch }}
       image_desc: "Bluespin for Microsoft Surface devices"
+      pr_installer_image: ${{ contains(fromJSON(needs.plan.outputs.surface_installer), format('{0}-{1}', matrix.fedora_branch, matrix.arch)) }}
       from_bluespin: true
       bluespin_tag_suffix: "-amd64"
       from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-amd64', matrix.fedora_branch) || '' }}

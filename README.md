@@ -102,6 +102,15 @@ Images built without the signing key (a fork's pull request, a local
 surface kernel with its COPR test-key signature; both say so in the build
 log, and both work with Secure Boot disabled.
 
+## Installing
+
+Install media live on [GitHub releases](https://github.com/LorbusChris/bluespin/releases):
+publishing a release builds the live installer ISOs (x86, and the
+generic aarch64 image's installer) and the Fairphone 5 flashable disk
+image, and attaches them there. The daily builds publish only the OCI
+images below -- existing installs update from those; nobody reinstalls
+to update.
+
 ## Switching to bluespin
 
 From an existing bootc/atomic Fedora system:

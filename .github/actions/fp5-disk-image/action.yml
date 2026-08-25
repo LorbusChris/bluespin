@@ -2,10 +2,11 @@
 # The flashable-disk pipeline for the Fairphone 5, from a bluespin-fp5
 # container that is already in root's container storage.
 #
-# One caller today -- build-fp5-images.yml, which pulls a published tag --
-# but the pipeline lives here as a unit so the steps mirror the local
-# `just disk`/`postprocess`/`verify-images`/`artifacts` flow and a second
-# caller stays cheap. The caller must have installed just.
+# Shared by build-fp5-images.yml's two paths, which get the container
+# there differently: the release/dispatch job pulls a published tag, and
+# the pull-request job loads the fp5 leg's shared-image artifact.
+# Everything after that point is identical, so it lives here once. The
+# caller must have installed just.
 name: Build FP5 disk image
 description: >-
   Build, post-process, verify and archive the flashable Fairphone 5 disk
