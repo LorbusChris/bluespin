@@ -1,0 +1,54 @@
+# The extra catalog: opt-in per-user apps -- what used to be
+# preinstalled on every platform, plus the general-desktop half of the old
+# full-desktop catalog (GNOME Circle and community apps).
+#   ujust install-flatpaks extra
+# installs them, `ujust remove-flatpaks extra` takes them away.
+# Validated against Flathub by .github/workflows/validate-flatpaks.yml.
+#
+# One app id per line; blank lines and # comments are ignored.
+# bluespin-arches: x86_64
+app.drey.Damask
+app.drey.EarTag
+com.belmoussaoui.Obfuscate
+com.github.finefindus.eyedropper
+com.github.flxzt.rnote
+com.github.hugolabe.Wike
+com.github.huluti.Curtail
+com.github.maoschanz.drawing
+com.github.neithern.g4music
+com.github.rajsolai.textsnatcher
+com.github.zocker_160.SyncThingy
+com.jeffser.Pigment
+com.pojtinger.felicitas.Sessions
+com.rafaelmardojai.Blanket
+com.usebottles.bottles
+com.valvesoftware.Steam
+de.haeckerfelix.AudioSharing
+de.haeckerfelix.Fragments
+de.swsnr.turnon
+dev.bragefuglseth.Fretboard
+dev.geopjr.Calligraphy
+dev.geopjr.Tuba
+eu.fortysixandtwo.chessclock
+info.febvre.Komikku
+io.github.diegoivan.pdf_metadata_editor
+io.github.fabrialberio.pinapp
+io.github.lainsce.Khronos
+io.github.mrvladus.List
+io.github.seadve.Mousai
+io.github.vikdevelop.SaveDesktop
+io.github.zaedus.spider
+io.gitlab.adhami3310.Converter
+io.gitlab.news_flash.NewsFlash
+org.fedoraproject.MediaWriter
+org.freedesktop.Piper
+org.gnome.gitlab.cheywood.Pulp
+org.gnome.gitlab.somas.Apostrophe
+org.gnome.gitlab.YaLTeR.VideoTrimmer
+org.gnome.Solanum
+org.gnome.World.Citations
+org.nickvision.cavalier
+org.nickvision.tubeconverter
+page.kramo.Cartridges
+re.sonny.Eloquent
+re.sonny.Tangram
