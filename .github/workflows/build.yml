@@ -1,14 +1,16 @@
 ---
 # The bluespin family as layered builds: the bluespin job builds and
-# publishes the image of that name -- every branch on pushes and the
-# nightly, rawhide included as the early-warning leg -- then the variant
-# jobs build bluespin-dx and bluespin-surface on the branched releases
-# FROM that published image, so a variant build on main never rebuilds
-# the bluespin content. Every floating bluespin tag -- 44, 45, rawhide,
+# publishes the image of that name, then the variant jobs build
+# bluespin-dx and bluespin-surface FROM that published image, so a
+# variant build on main never rebuilds the bluespin content. Pushes and
+# the nightly build exactly what ships: bluespin on x86 for 44 and 45
+# and on arm for 45 (arm's stable branch, and the generic UEFI image the
+# fp5 device layer builds FROM exactly as dx and surface build FROM the
+# amd64 instance), dx and surface on 44 and 45, fp5 on 45. Rawhide is in
+# no default matrix: its legs are opt-in, by ci label on a pull request
+# or by dispatch. Every floating bluespin tag -- 44, 45, rawhide,
 # latest, the dated aliases -- serves a manifest index, multi-arch on
-# the branched releases; the aarch64 half is the generic UEFI image the
-# fp5 device layer builds FROM, exactly as dx and surface build FROM the
-# amd64 instance.
+# 45.
 #
 # Pull requests build NOTHING by default and publish never; ci labels
 # opt legs in, and every leg is self-contained from the Containerfile's
@@ -266,32 +268,35 @@ jobs:
             fi
 
           elif [[ "${EVENT}" == "workflow_dispatch" ]]; then
-            # The branches input drives the x86 standard and variant legs;
-            # the arm and fp5 legs keep the push shape
+            # The branches input drives the x86 standard and variant
+            # legs, and the arm leg for every requested branch that has
+            # arm support -- 45 always, rawhide on demand, never 44
+            # (not arm's stable, no consumer); fp5 keeps the push shape
             for b in $(jq -r '.[]' <<< "${DISPATCH_BRANCHES}"); do
               add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
               add dx "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
               add surface "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              if [[ "${b}" == "45" || "${b}" == "rawhide" ]]; then
+                add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"arm64\"}"
+              fi
             done
-            add bluespin '{"fedora_branch":"44","arch":"arm64"}'
-            add bluespin '{"fedora_branch":"45","arch":"arm64"}'
+            jq -e 'index({"fedora_branch":"45","arch":"arm64"})' <<< "${bluespin}" > /dev/null \
+              || add bluespin '{"fedora_branch":"45","arch":"arm64"}'
             add fp5 '{"fedora_branch":"45","arch":"arm64"}'
           else
-            # Pushes and the nightly: the full published matrix. amd64
-            # builds every branch, rawhide included -- the early-warning
-            # leg; arm builds the branched releases; the variants build
-            # the branched releases (rawhide adds no variant-specific
-            # signal -- the surface kernel rebase trails mainline rc by
-            # construction); fp5 builds the one branch with a mobile
-            # shell.
-            for b in 44 45 rawhide; do
-              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
-            done
+            # Pushes and the nightly: exactly what ships. x86 builds the
+            # branched releases, arm builds its stable branch alone (44
+            # is not arm's stable and nothing consumes a 44-arm image --
+            # fp5 chains from 45), the variants ride the branched
+            # releases, fp5 the one branch with a mobile shell. Rawhide
+            # is in no default matrix: its legs are opt-in, by ci label
+            # on a pull request or by dispatch.
             for b in 44 45; do
-              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"arm64\"}"
+              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
               add dx "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
               add surface "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
             done
+            add bluespin '{"fedora_branch":"45","arch":"arm64"}'
             add fp5 '{"fedora_branch":"45","arch":"arm64"}'
           fi
 
@@ -406,16 +411,28 @@ jobs:
           # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
           reg="${IMAGE_REGISTRY,,}"
           # The stitch list, with each branch's architectures (OCI names:
-          # tags, platform fields and this table share one vocabulary)
+          # tags, platform fields and this table share one vocabulary).
+          # Rawhide's arm leg is on-demand (label or dispatch), so its
+          # instance folds into the index whenever one has been
+          # published.
           declare -A BRANCH_ARCHES=(
-            [44]="amd64 arm64"
+            [44]="amd64"
             [45]="amd64 arm64"
             [rawhide]="amd64"
+          )
+          declare -A BRANCH_OPT_ARCHES=(
+            [rawhide]="arm64"
           )
           source bluespin.env
           DATE=$(date +%Y%m%d)
           for branch in 44 45 rawhide; do
             arches="${BRANCH_ARCHES[${branch}]}"
+            for arch in ${BRANCH_OPT_ARCHES[${branch}]:-}; do
+              if skopeo inspect --no-tags --format '{{.Digest}}' \
+                  "docker://${reg}/bluespin:${branch}-${arch}" > /dev/null 2>&1; then
+                arches="${arches} ${arch}"
+              fi
+            done
 
             podman manifest rm idx 2>/dev/null || true
             podman manifest create idx

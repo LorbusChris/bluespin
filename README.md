@@ -11,17 +11,18 @@ ones live in [docs/desktop-defaults.md](docs/desktop-defaults.md).
 
 | Image | Purpose |
 | --- | --- |
-| `ghcr.io/lorbuschris/bluespin` | Fedora Silverblue plus full multimedia, curated GNOME apps, shell extensions and desktop defaults. The branched-release tags and `latest` are multi-arch manifests: x86, and a generic aarch64 UEFI image that is not device-specific |
+| `ghcr.io/lorbuschris/bluespin` | Fedora Silverblue plus full multimedia, curated GNOME apps, shell extensions and desktop defaults. `bluespin:45` is a multi-arch manifest: x86, and a generic aarch64 UEFI image that is not device-specific |
 | `ghcr.io/lorbuschris/bluespin-dx` | Adds the developer layer ([dx.sh](build_files/dx.sh)): virtualisation, containers, tracing and packaging tools |
 | `ghcr.io/lorbuschris/bluespin-surface` | Replaces the kernel with a [linux-surface](https://github.com/linux-surface/linux-surface)-patched kernel + `iptsd`, built in our [@mobility/surface](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/) COPR, for Microsoft Surface devices |
 | `ghcr.io/lorbuschris/bluespin-fp5` | The phone (aarch64): the [pocketblue](https://github.com/pocketblue/pocketblue) device layer for the Fairphone 5, the [@mobility/gnome-mobile](https://copr.fedorainfracloud.org/coprs/g/mobility/gnome-mobile/) shell and the [@mobility/sc7280](https://copr.fedorainfracloud.org/coprs/g/mobility/sc7280/) kernel, plus telephony ([fp5.sh](build_files/fp5.sh)) -- the device layer on the generic aarch64 bluespin image |
 
 Each platform is built per Fedora branch, and the branch is the tag:
 `bluespin:44`, `bluespin-dx:rawhide`. `latest` is an alias for the default
-branch (44). Every branch builds on Fedora's own Silverblue; which branches
-CI builds is the matrix in [build.yml](.github/workflows/build.yml), and the
-rawhide legs exist to find out what breaks on the next GNOME before it
-ships.
+branch (44). Every branch builds on Fedora's own Silverblue. Pushes and
+the nightly build exactly what ships -- x86 and the variants on 44 and
+45, arm and fp5 on 45 -- while rawhide legs are opt-in (a ci label or a
+dispatch): they exist to find out what breaks on the next GNOME before
+it ships, when someone asks.
 
 Pull requests build nothing by default: CI legs are opted in per PR with
 labels following the grammar
@@ -130,7 +131,7 @@ cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
 
 Every floating bluespin tag -- `44`, `45`, `rawhide`, `latest` and
 their dated aliases -- serves a manifest index, multi-arch (x86_64 +
-aarch64) on the branched releases. The per-arch images and the index
+aarch64) on 45, arm's stable branch. The per-arch images and the index
 over them are each cosign-signed -- verification holds whether a client
 resolves the index or an instance -- and `bootc switch` on an aarch64
 UEFI machine simply gets the arm image.
