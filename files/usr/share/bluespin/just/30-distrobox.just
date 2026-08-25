@@ -1,0 +1,72 @@
+# Vendored from ublue-os/packages (ublue-os-just, Apache-2.0). bluespin
+# curation: setup-distrobox-app (whose apps.ini bluespin does not ship) and
+# the zenity-dependent DaVinci Resolve installer removed.
+# vim: set ft=make :
+
+alias assemble := distrobox-assemble
+
+# Create distroboxes from a defined manifest
+distrobox-assemble CONTAINER="prompt" ACTION="create" FILE="/etc/distrobox/distrobox.ini":
+    #!/usr/bin/bash
+    # Distroboxes are gathered from distrobox.ini, please add them there
+    source /usr/lib/ujust/ujust.sh
+    AssembleList {{ FILE }} {{ ACTION }} {{ CONTAINER }}
+
+alias distrobox := distrobox-new
+
+# Create a new custom distrobox
+distrobox-new IMAGE="prompt" NAME="prompt" HOMEDIR="":
+    #!/usr/bin/bash
+    # Please only add distroboxes here if you need special checks and logins!
+    source /usr/lib/ujust/ujust.sh
+    # Supported images
+    IMAGES='
+      New
+      Steambox
+    '
+    IMAGE={{ IMAGE }}
+    NAME={{ NAME }}
+    HOMEDIR={{ HOMEDIR }}
+    ARGS=""
+    # Ask user to select an image if we need to prompt
+    if [ "$IMAGE" == "prompt" ]; then
+      echo "Select what container you want to make"
+      IMAGE=$(Choose $IMAGES)
+    fi
+    # If image is "new"
+    if [ "${IMAGE,,}" == "new" ]; then
+      echo -en "Please enter an image: "
+      read IMAGE
+      if [ "$NAME" == "prompt" ]; then
+        echo -en "Please enter a name for the container: "
+        read NAME
+      fi
+    elif [ -z "${IMAGE,,}" ]; then
+      exit 1
+    fi
+    # Tailored image selection logic
+    # Logic for Steambox
+    if [ ${IMAGE,,} == "steambox" ]; then
+      echo "${b}Creating Steambox distrobox ...${n}"
+      if command -v /usr/bin/mutter > /dev/null; then
+        IMAGE="ghcr.io/ublue-os/steambox-gnome"
+        NAME="steambox"
+        ARGS="--unshare-netns"
+      else
+        IMAGE="ghcr.io/ublue-os/steambox"
+        NAME="steambox"
+        ARGS="--unshare-netns"
+      fi
+    # Anything else
+    else
+      if [ "$NAME" == "prompt" ]; then
+        echo -en "Please enter a name for the container: "
+        read NAME
+      fi
+    fi
+    # Create the distrobox
+    Distrobox "$IMAGE" "$NAME" "$HOMEDIR" $ARGS
+    # If IMAGE is steambox, link to documentation
+    if [ "${IMAGE,,}" == "steambox" ]; then
+      echo $(Urllink "https://github.com/ublue-os/toolboxes#steambox-usage" "Check out the docs for exportable apps and instructions")
+    fi

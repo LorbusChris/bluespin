@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+
+JUST_JUSTFILE="/usr/share/bluespin/just/justfile" /usr/bin/just "${@}"

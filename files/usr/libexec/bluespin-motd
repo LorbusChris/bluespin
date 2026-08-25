@@ -1,0 +1,47 @@
+#!/usr/bin/bash
+# The bluespin message of the day: banner, pointers and one tip for local
+# shells (first shell of the session only), plus a compact status block for
+# SSH logins (every time -- each SSH session is a fresh "which box is this?"
+# moment). Run by /etc/profile.d/96-bluespin-motd.sh, which already honours
+# the ~/.config/no-show-user-motd flag that `ujust toggle-user-motd` flips.
+set -euo pipefail
+
+# Local shells: only the first one per login session shows the banner. The
+# runtime dir vanishes at logout, so the next session starts fresh.
+if [[ -z "${SSH_CONNECTION:-}" ]]; then
+    marker="${XDG_RUNTIME_DIR:-/tmp}/bluespin-motd-shown"
+    [[ -e "${marker}" ]] && exit 0
+    touch "${marker}" 2>/dev/null || true
+fi
+
+# shellcheck disable=SC1091
+source /usr/lib/os-release
+
+echo ""
+echo " bluespin  ›  ${IMAGE_ID:-bluespin}:${IMAGE_VERSION:-?} (Fedora Linux ${VERSION_ID:-?})"
+
+if [[ -n "${SSH_CONNECTION:-}" ]]; then
+    up="$(uptime -p 2>/dev/null || true)"
+    up="${up#up }"
+    disk="$(df --output=pcent /sysroot 2>/dev/null | tail -1 | tr -d ' ')"
+    echo ""
+    echo "   kernel $(uname -r) · up ${up:-?} · /sysroot ${disk:-?} used"
+fi
+
+echo ""
+echo "   ujust                    list available commands"
+echo "   ujust toggle-user-motd   hide this banner"
+echo "   bootc rollback           undo the last update"
+
+tips=/usr/share/bluespin/motd/tips.txt
+if [[ -r "${tips}" ]]; then
+    tip="$(grep -vE '^[[:space:]]*(#|$)' "${tips}" | shuf -n1 || true)"
+    if [[ -n "${tip}" ]]; then
+        echo ""
+        echo "   tip: ${tip}"
+    fi
+fi
+
+echo ""
+echo "   issues → github.com/LorbusChris/bluespin/issues"
+echo ""

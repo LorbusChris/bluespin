@@ -1,141 +1,189 @@
-# Generated from the former system-flatpaks.list.
+# bluespin's preinstalled flatpaks: the system set, on every platform.
+# Everything beyond this is an opt-in per-user catalog under
+# /usr/share/bluespin/flatpaks (`ujust install-flatpaks`).
 # NOTE: flatpak-preinstall tracks these entries; removing an entry later
 # uninstalls that app from users' systems. Remove deliberately.
-#
 # bluespin-arches: x86_64
-
+[Flatpak Preinstall app.drey.Dialect]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall app.drey.Warp]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall app.fotema.Fotema]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall be.alexandervanhee.gradia]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall com.belmoussaoui.Authenticator]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall com.belmoussaoui.Decoder]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall com.github.jeromerobert.pdfarranger]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall com.github.johnfactotum.Foliate]
+Branch=stable
+IsRuntime=false
 [Flatpak Preinstall com.github.PintaProject.Pinta]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall com.github.tchx84.Flatseal]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall com.mattjakeman.ExtensionManager]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall com.ranfdev.DistroShelf]
 Branch=stable
 IsRuntime=false
-
+[Flatpak Preinstall com.spotify.Client]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall de.bund.ausweisapp.ausweisapp2]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall de.haeckerfelix.Shortwave]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall de.schmidhuberj.DieBahn]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall dev.Cogitri.Health]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall dev.mufeed.Wordbook]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall im.dino.Dino]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall io.bassi.Amberol]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall io.github.alainm23.planify]
+Branch=stable
+IsRuntime=false
 [Flatpak Preinstall io.github.flattool.Ignition]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall io.github.flattool.Warehouse]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall io.github.kolunmi.Bazaar]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall io.gitlab.adhami3310.Impression]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall io.missioncenter.MissionCenter]
 Branch=stable
 IsRuntime=false
-
+[Flatpak Preinstall it.mijorus.smile]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall org.gimp.GIMP]
+Branch=stable
+IsRuntime=false
 [Flatpak Preinstall org.gnome.baobab]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Calculator]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Calendar]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Characters]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.clocks]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Connections]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Contacts]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.DejaDup]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.FileRoller]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Firmware]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.font-viewer]
 Branch=stable
 IsRuntime=false
-
+[Flatpak Preinstall org.gnome.Fractal]
+Branch=stable
+IsRuntime=false
 [Flatpak Preinstall org.gnome.Logs]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Loupe]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Maps]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.NautilusPreviewer]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Papers]
 Branch=stable
 IsRuntime=false
-
+[Flatpak Preinstall org.gnome.Podcasts]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall org.gnome.seahorse.Application]
+Branch=stable
+IsRuntime=false
 [Flatpak Preinstall org.gnome.Showtime]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.SimpleScan]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Snapshot]
 Branch=stable
 IsRuntime=false
-
+[Flatpak Preinstall org.gnome.SoundRecorder]
+Branch=stable
+IsRuntime=false
 [Flatpak Preinstall org.gnome.TextEditor]
 Branch=stable
 IsRuntime=false
-
 [Flatpak Preinstall org.gnome.Weather]
 Branch=stable
 IsRuntime=false
-
-[Flatpak Preinstall org.mozilla.thunderbird]
+[Flatpak Preinstall org.gnome.World.Secrets]
 Branch=stable
 IsRuntime=false
-
-[Flatpak Preinstall page.tesk.Refine]
-Branch=stable
-IsRuntime=false
-
 [Flatpak Preinstall org.gtk.Gtk3theme.adw-gtk3]
 Branch=3.22
 IsRuntime=true
-
 [Flatpak Preinstall org.gtk.Gtk3theme.adw-gtk3-dark]
 Branch=3.22
 IsRuntime=true
+[Flatpak Preinstall org.inkscape.Inkscape]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall org.libreoffice.LibreOffice]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall org.mozilla.thunderbird]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall org.signal.Signal]
+Branch=stable
+IsRuntime=false
+[Flatpak Preinstall page.tesk.Refine]
+Branch=stable
+IsRuntime=false

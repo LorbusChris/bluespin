@@ -1,7 +1,7 @@
 [Unit]
 # Bluefin ships flatpak-preinstall.service via its `common` artifact; a plain
 # Fedora base has no equivalent, so the .preinstall files we install would
-# never be acted on. This is the minimal stand-in for the rawhide image.
+# never be acted on. This is the minimal stand-in on that base.
 Description=Preinstall flatpaks listed in /usr/share/flatpak/preinstall.d
 Documentation=https://docs.flatpak.org/en/latest/flatpak-command-reference.html#flatpak-preinstall
 After=network-online.target

@@ -1,0 +1,36 @@
+# The dx catalog: developer GUI tools -- what used to be preinstalled on
+# bluespin-dx, plus the developer/design half of the old full-desktop
+# catalog. Opt-in per-user, on any platform:
+#   ujust install-flatpaks dx
+# installs them, `ujust remove-flatpaks dx` takes them away.
+# Validated against Flathub by .github/workflows/validate-flatpaks.yml.
+#
+# One app id per line; blank lines and # comments are ignored.
+# bluespin-arches: x86_64
+app.drey.Biblioteca
+app.drey.Elastic
+ca.desrt.dconf-editor
+cc.arduino.IDE2
+com.prusa3d.PrusaSlicer
+com.rafaelmardojai.SharePreview
+com.ranfdev.Notify
+de.leopoldluley.Clapgrep
+dev.geopjr.Collision
+im.riot.Riot
+io.github.getnf.embellish
+io.github.ronniedroid.concessio
+io.podman_desktop.PodmanDesktop
+me.iepure.devtoolbox
+org.freecad.FreeCAD
+org.freedesktop.Bustle
+org.gaphor.Gaphor
+org.ghidra_sre.Ghidra
+org.gnome.Boxes
+org.gnome.Builder
+org.gnome.design.Emblem
+org.gnome.design.IconLibrary
+org.gnome.dspy
+org.gnome.gitlab.YaLTeR.Identity
+org.pipewire.Helvum
+re.sonny.Commit
+sm.puri.Chatty

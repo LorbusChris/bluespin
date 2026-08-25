@@ -1,0 +1,21 @@
+# bluespin's ujust entry point. Everything in /usr/share/bluespin/just is
+# vendored from ublue-os/packages (Apache-2.0) and curated -- what is
+# imported here is exactly what ships, so there is no machinery for stubbing
+# or stripping upstream recipes this image cannot use. 60-custom.just is
+# bluespin's own.
+set allow-duplicate-recipes := true
+set ignore-comments := true
+
+_default:
+    #!/usr/bin/bash
+    source /usr/lib/ujust/libformatting.sh
+    echo "$(Urllink "https://github.com/LorbusChris/bluespin#readme" "Click here to view the bluespin documentation")"
+    /usr/bin/ujust --list --list-heading $'Available commands:\n' --list-prefix $' - '
+
+# Imports
+import "/usr/share/bluespin/just/00-default.just"
+import "/usr/share/bluespin/just/10-update.just"
+import "/usr/share/bluespin/just/15-luks.just"
+import "/usr/share/bluespin/just/20-clean.just"
+import "/usr/share/bluespin/just/30-distrobox.just"
+import "/usr/share/bluespin/just/60-custom.just"

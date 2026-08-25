@@ -1,10 +1,10 @@
 #!/bin/bash
 # The developer layer for bluespin-dx.
 #
-# All variants build on ghcr.io/ublue-os/bluefin rather than bluefin-dx, so
-# the base carries no developer tooling and the two non-dx images are ~2 GB
-# smaller. This re-creates Bluefin's dx layer for the one variant that wants
-# it, adapted from their build_files/dx/00-dx.sh.
+# Every platform builds on plain Fedora Silverblue, so nothing carries
+# developer tooling by default and the two non-dx images stay small. This is
+# the developer layer for the one platform that wants it, adapted from
+# Bluefin's build_files/dx/00-dx.sh.
 #
 # The one deliberate omission is Docker: no docker-ce, docker-ce-cli,
 # containerd.io, buildx/compose/model plugins, no docker.socket, no
@@ -61,21 +61,21 @@ DX_PACKAGES=(
     tiptop
     trace-cmd
 
-    # The CLI set ujust bluefin-cli would otherwise fetch from Homebrew.
-    # Whatever Fedora packages comes from here; the remainder stays in the
-    # trimmed cli.Brewfile below. starship is already baked into the base as a
-    # binary, so it needs neither.
+    # The CLI set Bluefin's bluefin-cli recipe fetches from Homebrew, as
+    # Fedora packages instead. Starship is installed separately for every
+    # platform (build_files/starship.sh).
     bat
     chezmoi
     direnv
-    eza
     fd-find
     gh
     ripgrep
-    tealdeer
+    # tldr rather than tealdeer, Bluefin's pick: rust-tealdeer was retired
+    # from Fedora before 45 branched, and tldr is the same command from the
+    # Python client, on every branch.
+    tldr
     trash-cli
     uutils-coreutils
-    ugrep
     yq
     zoxide
 
@@ -107,6 +107,40 @@ fi
 # bluespin's own additions, as opposed to everything above, which mirrors
 # Bluefin's dx layer: packaging and kernel work, phone and capture hardware.
 BLUESPIN_DX_PACKAGES=(
+    # The classics the Bluefin base used to provide for everyone; here they
+    # are developer tooling
+    git
+    vim-enhanced
+
+    # Network diagnostics
+    tcpdump
+    traceroute
+    net-tools
+    usbip
+    waypipe
+
+    # The C toolchain, as product. (The v4l2loopback build needs one too, but
+    # that happens in the Containerfile's kernel-builder stage and never
+    # touches this image -- see build_files/kernel-builder.sh.)
+    gcc
+    gcc-c++
+    binutils
+    make
+    glibc-devel
+    libstdc++-devel
+    kernel-headers
+    libxcrypt-devel
+    setools-console
+
+    # Low-level hardware probing
+    lshw
+    i2c-tools
+    evtest
+    fxload
+    igt-gpu-tools
+    libcamera-tools
+    libcamera-gstreamer
+
     copr-cli
     fedora-packager
     fedora-packager-kerberos
@@ -118,6 +152,10 @@ BLUESPIN_DX_PACKAGES=(
     dvb-tools
     v4l-utils
     feedbackd
+    # Mobile messaging plumbing: the MMS daemon and the libpurple SMS plugin
+    # that Chatty (dx catalog) drives over D-Bus when a modem is attached
+    mmsd-tng
+    purple-mm-sms
     nextcloud-client-nautilus
     tio
 )
@@ -156,25 +194,10 @@ install -Dm0755 /ctx/files/usr/bin/bluespin-dx-groups /usr/bin/bluespin-dx-group
 install -Dm0644 /ctx/files/usr/lib/systemd/system/bluespin-dx-groups.service \
     /usr/lib/systemd/system/bluespin-dx-groups.service
 
-# ujust bluefin-cli fetches cli.Brewfile from Homebrew; most of that set is
-# now installed above as RPMs, so trim it to what Fedora does not package.
-# ublue-bling only aliases tools it can find, so the shell integration is
-# unaffected. brew itself is left alone for anyone who wants it.
-tee /usr/share/ublue-os/homebrew/cli.Brewfile << 'EOF'
-# Trimmed by bluespin-dx: everything else in this set ships as an RPM.
-tap "valkyrie00/bbrew"
-brew "atuin"
-brew "bash-preexec"
-brew "valkyrie00/bbrew/bbrew"
-brew "dysk"
-brew "mise"
-EOF
-
-# Likewise ide.Brewfile: this image installs VS Code as an RPM from
-# Microsoft's repo, so the cask would be a second copy of the same editor.
-# The Insiders and VSCodium casks are separate products and stay.
-sed -i '/^cask "ublue-os\/tap\/visual-studio-code-linux"$/d' \
-    /usr/share/ublue-os/homebrew/ide.Brewfile
+# The containerized CLI functions (kubectl, helm, k9s, flux, argocd, grype,
+# syft) -- see the file for the reasoning
+install -Dm0644 /ctx/files/etc/profile.d/97-bluespin-container-clis.sh \
+    /etc/profile.d/97-bluespin-container-clis.sh
 
 systemctl enable podman.socket
 systemctl enable libvirt-workaround.service

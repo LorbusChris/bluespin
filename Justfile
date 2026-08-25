@@ -7,7 +7,7 @@ export repo_name := env_var("REPO_NAME")
 export image_desc := env_var("IMAGE_DESC")
 export image_keywords := env_var("IMAGE_KEYWORDS")
 export image_logo_url := env_var("IMAGE_LOGO_URL")
-export default_tag := env_var("DEFAULT_TAG")
+export default_fedora_branch := env_var("DEFAULT_FEDORA_BRANCH")
 export chunkah_image := env_var("CHUNKAH_IMAGE")
 
 [private]
@@ -72,31 +72,73 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image using the specified parameters
+# Build one platform on one Fedora branch: `just build bluespin-dx rawhide`.
 #
-# containerfile: variants whose base differs get their own file. Not because
-# FROM cannot be parametrized -- an ARG-driven FROM is standard -- but because a
-# literal FROM keeps each base digest-pinned where Renovate's dockerfile
-# manager bumps it, and the per-base build scripts are disjoint anyway.
-# arch: only for cross-arch variants; empty means the host arch, which is what
-# every amd64 variant wants.
-build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $arch="":
+# The branch is the image tag. Its base comes from bluespin.env
+# (FEDORA_<BRANCH>_BASE_IMAGE, digest-pinned there and nowhere else) and goes to
+# the one Containerfile as BASE_IMAGE; build.sh branches on IMAGE_NAME for the
+# platform and detects the base it landed on.
+# arch: only for cross-arch platforms; empty means the host arch, which is what
+# every amd64 platform wants.
+build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
     #!/usr/bin/env bash
     set -euox pipefail
+
+    tag="${fedora_branch}"
+    base_var="FEDORA_${fedora_branch^^}_BASE_IMAGE"
+    base="${!base_var:-}"
+    if [[ -z "${base}" ]]; then
+        echo "no base image for Fedora ${fedora_branch}: set ${base_var} in bluespin.env" >&2
+        exit 1
+    fi
 
     BUILD_ARGS=()
     LABELS=()
 
-    # The Containerfile branches on IMAGE_NAME to build the variant
-    BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${target_image##*/}")
+    BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base}")
+    BUILD_ARGS+=("--build-arg" "FEDORA_BRANCH=${fedora_branch}")
+
+    # The platform is a Containerfile stage (the stages set their own
+    # IMAGE_NAME; passing it as a build-arg would mislabel the shared
+    # bluespin layer inside a variant build).
+    case "${target_image##*/}" in
+        bluespin) BUILD_ARGS+=("--target" "bluespin") ;;
+        bluespin-dx) BUILD_ARGS+=("--target" "dx") ;;
+        bluespin-surface) BUILD_ARGS+=("--target" "surface") ;;
+        *)
+            echo "no Containerfile stage for platform '${target_image##*/}'" >&2
+            exit 1
+            ;;
+    esac
+
+    # CI (pushes on main) builds the variants FROM the just-pushed bluespin
+    # image; locally and on PRs the variants chain from the bluespin stage
+    # in the Containerfile instead.
+    if [[ -n "${BLUESPIN_IMAGE:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "BLUESPIN_IMAGE=${BLUESPIN_IMAGE}")
+    fi
+
+    # The out-of-tree module's own version, for modinfo and dmesg. Upstream's
+    # Makefile derives it with `git describe`, which cannot work inside the
+    # build: the submodule's .git is a gitlink into this repo's .git/modules,
+    # and neither is in the build context.
+    BUILD_ARGS+=("--build-arg" \
+        "V4L2LOOPBACK_VERSION=$(git -C kmods/v4l2loopback describe --tags --always --dirty 2>/dev/null || echo snapshot)")
+
+    # Optional Secure Boot signing key for the surface kernel (CI stages it
+    # from the SECUREBOOT_KEY repo secret; see build.sh). Absent means an
+    # unsigned build that warns.
+    if [[ -n "${SECUREBOOT_KEY_FILE:-}" ]]; then
+        BUILD_ARGS+=("--secret" "id=secureboot_key,src=${SECUREBOOT_KEY_FILE}")
+    fi
 
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
         LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
         LABELS+=("--label" "org.opencontainers.image.documentation=https://raw.githubusercontent.com/{{ repo_organization }}/{{ repo_name }}/${GIT_SHA}/README.md")
-        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}/blob/${GIT_SHA}/${containerfile}")
+        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ repo_name }}/blob/${GIT_SHA}/Containerfile")
         LABELS+=("--label" "org.opencontainers.image.url=https://github.com/{{ repo_organization }}/{{ repo_name }}/tree/${GIT_SHA}")
-        LABELS+=("--label" "org.opencontainers.image.version={{ default_tag }}.$(date +%Y%m%d)-${GIT_SHA}")
+        LABELS+=("--label" "org.opencontainers.image.version=${fedora_branch}.$(date +%Y%m%d)-${GIT_SHA}")
     fi
 
     # Image metadata for https://artifacthub.io/ - This is optional but is highly recommended so we all can get a index of all the custom images
@@ -112,7 +154,15 @@ build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $
     LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
 
     # This actually builds the image!
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${containerfile}")
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile)
+
+    # NO_CACHE=1 forces a full rebuild. Podman's layer cache keys on neither
+    # bind-mounted context content nor secrets, so a cached layer can lie
+    # about both (see README); local verification builds want this. CI runs
+    # on fresh runners and never needs it.
+    if [[ -n "${NO_CACHE:-}" ]]; then
+        PODMAN_BUILD_ARGS+=("--no-cache")
+    fi
 
     # Cross-arch builds need qemu-user-static with binfmt registered on an x86
     # host and take hours; CI uses native arm64 runners, where this is a no-op
@@ -123,15 +173,8 @@ build $target_image=image_name $tag=default_tag $containerfile="Containerfile" $
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 
-# Build the experimental rawhide/GNOME 51 test image. Routed through `build`
-# so it gets the same OCI/ArtifactHub labels as every other image; the env
-# override supplies its description.
-build-rawhide $target_image="bluespin-rawhide" $tag=default_tag:
-    IMAGE_DESC="Experimental bluespin on Fedora rawhide" \
-        just build "{{ target_image }}" "{{ tag }}" Containerfile.rawhide
-
 # Split the image for smaller updates (New)!
-rechunk $target_image=image_name $tag=default_tag:
+rechunk $target_image=image_name $tag=default_fedora_branch:
     #!/usr/bin/env bash
     set -xeuo pipefail
 
@@ -165,7 +208,7 @@ rechunk $target_image=image_name $tag=default_tag:
     podman tag "${CHUNKED_IMAGE}" "${target_image}:${tag}"
 
 # Split the image for smaller updates (Classical)!
-ostree-rechunk $target_image=image_name $tag=default_tag:
+ostree-rechunk $target_image=image_name $tag=default_fedora_branch:
     #!/usr/bin/env bash
     set -xeuo pipefail
 
@@ -198,38 +241,38 @@ ostree-rechunk $target_image=image_name $tag=default_tag:
     CHUNKED_IMAGE="$(podman pull oci-archive:"${RPM_OSTREE_OUTPUT_DIR}/${target_image##*/}.oci")"
     podman tag "${CHUNKED_IMAGE}" "${target_image}:${tag}"
 
-# Generate Default Tag
+# Generate Tags: the branch, dated, and with the commit; the default branch
+# additionally carries `latest` and the undated set it always had, so nothing
+# that follows `bluespin:latest` or `bluespin:<date>` changes. Non-default
+# branches never get a bare date tag -- the legs build the same day.
 [group('Utility')]
-generate-default-tag $tag=default_tag:
-    #!/usr/bin/env bash
-    set -eou pipefail
-
-    echo "${tag}"
-
-# Generate Tags
-[group('Utility')]
-generate-build-tags $target_image=image_name $tag=default_tag:
+generate-build-tags $target_image=image_name $fedora_branch=default_fedora_branch:
     #!/usr/bin/env bash
     set -eou pipefail
 
     DATE=$(date +%Y%m%d)
-    BUILD_TAGS=()
+    GIT_SHA=""
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
-        BUILD_TAGS+=("${tag}-${GIT_SHA}")
-        BUILD_TAGS+=("${tag}-${DATE}-${GIT_SHA}")
-        BUILD_TAGS+=("${DATE}-${GIT_SHA}")
     fi
 
-    BUILD_TAGS+=("${DATE}")
-    BUILD_TAGS+=("${tag}")
-    BUILD_TAGS+=("${tag}-${DATE}")
+    BUILD_TAGS=("${fedora_branch}" "${fedora_branch}-${DATE}")
+    if [[ -n "${GIT_SHA}" ]]; then
+        BUILD_TAGS+=("${fedora_branch}-${DATE}-${GIT_SHA}")
+    fi
+
+    if [[ "${fedora_branch}" == "{{ default_fedora_branch }}" ]]; then
+        BUILD_TAGS+=("latest" "latest-${DATE}" "${DATE}")
+        if [[ -n "${GIT_SHA}" ]]; then
+            BUILD_TAGS+=("latest-${GIT_SHA}" "latest-${DATE}-${GIT_SHA}" "${DATE}-${GIT_SHA}")
+        fi
+    fi
 
     echo "${BUILD_TAGS[@]}"
 
 # Tag Images
 [group('Utility')]
-tag-images $target_image=image_name $tag=default_tag tags="":
+tag-images $target_image=image_name $tag=default_fedora_branch tags="":
     #!/usr/bin/env bash
     set -eoux pipefail
 

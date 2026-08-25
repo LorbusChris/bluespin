@@ -1,27 +1,4 @@
-[submodule "extensions/weather-or-not"]
-	path = extensions/weather-or-not
-	url = https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not.git
-[submodule "extensions/nekotorch"]
-	path = extensions/nekotorch
-	url = https://gitlab.com/lorbus42/NekoTorch.git
-[submodule "extensions/caffeine"]
-	path = extensions/caffeine
-	url = https://github.com/LorbusChris/gnome-shell-extension-caffeine.git
-[submodule "extensions/search-light"]
-	path = extensions/search-light
-	url = https://github.com/LorbusChris/search-light.git
-[submodule "extensions/bazaar-integration"]
-	path = extensions/bazaar-integration
-	url = https://github.com/LorbusChris/bazaar-companion.git
-[submodule "extensions/gradia-integration"]
-	path = extensions/gradia-integration
-	url = https://github.com/LorbusChris/gradia-capture.git
-[submodule "extensions/appindicator"]
-	path = extensions/appindicator
-	url = https://github.com/ubuntu/gnome-shell-extension-appindicator.git
-[submodule "extensions/mosaicwm"]
-	path = extensions/mosaicwm
-	url = https://github.com/CleoMenezesJr/MosaicWM.git
-[submodule "extensions/gnome-shell-extensions"]
-	path = extensions/gnome-shell-extensions
-	url = https://gitlab.gnome.org/lorbus/gnome-shell-extensions.git
+[submodule "kmods/v4l2loopback"]
+	path = kmods/v4l2loopback
+	url = https://github.com/v4l2loopback/v4l2loopback.git
+	branch = main
