@@ -244,7 +244,9 @@ jobs:
           # https://github.com/containers/container-libs/issues/388
           # https://github.com/coreos/rpm-ostree/issues/5509
           # use old bundle format, so we can use newer cosign 3.X.X instead of 2.X.X
-          cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+          # retried: the tlog upload flakes when Rekor does (see retry.sh)
+          .github/scripts/retry.sh 3 30 \
+            cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
 
       # Keyless too, additively: the same digest gets a second signature,
       # bound to this workflow's OIDC identity via a Fulcio certificate and
@@ -259,7 +261,8 @@ jobs:
         env:
           DIGEST: ${{ steps.push-image.outputs.digest }}
         run: |
-          cosign sign -y --new-bundle-format=false --use-signing-config=false ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+          .github/scripts/retry.sh 3 30 \
+            cosign sign -y --new-bundle-format=false --use-signing-config=false ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
 
   # The vulnerability report never needed the image: grype reads the SBOM
   # the build job uploaded. Report-only by design -- a distro image always
@@ -327,6 +330,10 @@ jobs:
       packages: write
       id-token: write
     steps:
+      # For .github/scripts/retry.sh
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
       - name: Download SBOM artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -352,7 +359,9 @@ jobs:
         run: |
           # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
           ref="${IMAGE_REGISTRY,,}/${{ inputs.platform }}@${DIGEST}"
-          cosign attest -y --key env://COSIGN_PRIVATE_KEY \
+          .github/scripts/retry.sh 3 30 \
+            cosign attest -y --key env://COSIGN_PRIVATE_KEY \
             --predicate sbom.spdx.json --type spdxjson "${ref}"
-          cosign attest -y \
+          .github/scripts/retry.sh 3 30 \
+            cosign attest -y \
             --predicate sbom.spdx.json --type spdxjson "${ref}"
