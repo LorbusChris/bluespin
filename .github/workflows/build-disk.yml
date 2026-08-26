@@ -171,7 +171,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
-          ARCHIVE: ${{ env.IMAGE_NAME }}-${{ needs.plan-release.outputs.tag }}.7z
+          ARCHIVE: ${{ env.IMAGE_NAME }}-${{ needs.plan-release.outputs.tag }}.tar.xz
         run: |
           set -euo pipefail
           # --clobber: a re-run of a failed or partial release run must be
