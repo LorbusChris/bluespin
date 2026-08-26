@@ -354,6 +354,15 @@ dnf -y copr disable lorbus/network-displays
 # for the pin and the Renovate flow.
 install_starship
 
+# The containerized CLIs, oras above all: install media is published as
+# OCI artifacts, so `oras pull` is how anyone fetches an installer, and
+# Fedora packages no oras. Every tool in that file is a shell function
+# over a digest-pinned image, pulled only when first used and yielding
+# to a real binary on PATH -- so the developer tools alongside oras cost
+# an unused definition on the editions that do not want them.
+install -Dm0644 /ctx/files/etc/profile.d/97-bluespin-container-clis.sh \
+    /etc/profile.d/97-bluespin-container-clis.sh
+
 # Tailscale, from its vendor repo. Shipped disabled (same hygiene as
 # RPMFusion and the COPRs) and enabled only for this transaction; the fedora
 # path is release-agnostic, so one repo file serves every branch. tailscaled

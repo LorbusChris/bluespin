@@ -241,11 +241,6 @@ install -Dm0755 /ctx/files/usr/bin/bluespin-dx-groups /usr/bin/bluespin-dx-group
 install -Dm0644 /ctx/files/usr/lib/systemd/system/bluespin-dx-groups.service \
     /usr/lib/systemd/system/bluespin-dx-groups.service
 
-# The containerized CLI functions (kubectl, helm, k9s, flux, argocd, grype,
-# syft) -- see the file for the reasoning
-install -Dm0644 /ctx/files/etc/profile.d/97-bluespin-container-clis.sh \
-    /etc/profile.d/97-bluespin-container-clis.sh
-
 systemctl enable podman.socket
 systemctl enable libvirt-workaround.service
 systemctl enable bluespin-dx-groups.service

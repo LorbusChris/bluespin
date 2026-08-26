@@ -1,5 +1,13 @@
 # shellcheck shell=sh
-# Containerized CLIs, on the developer platform only.
+# Containerized CLIs: a shell function per tool, over an image pinned
+# tag@digest, pulled only the first time it is used. Nothing here is on
+# disk until then, and a real binary on PATH always wins.
+#
+# oras is on every edition, because bluespin's install media lives in the
+# registry as OCI artifacts -- an ISO is far larger than a GitHub release
+# asset may be -- and needing to install a tool before you can fetch the
+# installer would be a poor joke. The rest are a developer convenience
+# that costs an unused function definition everywhere else.
 #
 # The images are pinned tag@digest and Renovate follows them (the *_IMAGE=
 # regex manager also scans this file).
@@ -11,6 +19,7 @@ FLUX_IMAGE=ghcr.io/fluxcd/flux-cli:v2.9.4@sha256:5260c79fb1b744c78755d98bcb27197
 ARGOCD_IMAGE=quay.io/argoproj/argocd:v3.5.1@sha256:0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8
 GRYPE_IMAGE=docker.io/anchore/grype:v0.117.0@sha256:ddf9e9f204049f3a4a0955ef70873cabab6a31432125ad4f20a490b54950a253
 SYFT_IMAGE=docker.io/anchore/syft:v1.51.0@sha256:678bfa565b60f747aac0f8e964fe5588a24445b8d0a480e91f6efd70020dfbb0
+ORAS_IMAGE=ghcr.io/oras-project/oras:v1.3.0@sha256:6ce045ce069a89934d6666b8b49f9c4c0145201bd6de6dbe2aee267814c55468
 
 # host network so cluster endpoints resolve as they would natively; the kube
 # config mounted read-write (context switching writes it) but created first,
@@ -36,3 +45,23 @@ command -v flux > /dev/null 2>&1 || flux() { _bluespin_cli "${FLUX_IMAGE}" flux 
 command -v argocd > /dev/null 2>&1 || argocd() { _bluespin_cli "${ARGOCD_IMAGE}" argocd "$@"; }
 command -v grype > /dev/null 2>&1 || grype() { _bluespin_cli "${GRYPE_IMAGE}" grype "$@"; }
 command -v syft > /dev/null 2>&1 || syft() { _bluespin_cli "${SYFT_IMAGE}" syft "$@"; }
+
+# oras wants none of the kube apparatus: just the working directory it
+# pulls into, and podman's own auth when it exists, so a repository
+# someone has already `podman login`ed to works without logging in again.
+# Rootless podman maps container root to the caller, so what lands in the
+# working directory belongs to whoever ran this.
+_bluespin_oras() {
+    if [ -f "${XDG_RUNTIME_DIR}/containers/auth.json" ]; then
+        podman run --rm --net=host --security-opt label=disable \
+            -v "${PWD}:/workdir" -w /workdir \
+            -v "${XDG_RUNTIME_DIR}/containers/auth.json:/root/.docker/config.json:ro" \
+            "${ORAS_IMAGE}" "$@"
+    else
+        podman run --rm --net=host --security-opt label=disable \
+            -v "${PWD}:/workdir" -w /workdir \
+            "${ORAS_IMAGE}" "$@"
+    fi
+}
+
+command -v oras > /dev/null 2>&1 || oras() { _bluespin_oras "$@"; }
