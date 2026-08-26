@@ -22,24 +22,51 @@ docker:
     use-sigstore-attachments: true
 EOF
 
-    # Where the policy lives depends on the base: ublue-os-signing installs one
-    # under /etc (and ostree may present it as /usr/etc), while stock Fedora
-    # only has the containers-common default in /usr/share. Patch whichever
-    # exist -- containers/image reads /etc first and falls back to /usr/share --
-    # and fail if none do, so a base that moves it cannot slip past unnoticed.
-    local policy policy_tmp policy_patched=0
-    for policy in /etc/containers/policy.json /usr/etc/containers/policy.json \
-        /usr/share/containers/policy.json; do
-        [[ -f "$policy" ]] || continue
-        policy_tmp="$(mktemp)"
-        jq '.transports.docker["ghcr.io/lorbuschris"] = [{
+    # Two things have to be true of the policy for a signed rebase to work
+    # at all, and neither was:
+    #
+    # 1. It must exist at /etc/containers/policy.json. ostree-rs-ext
+    #    hardcodes that path (lib/src/container/skopeo.rs, POLICY_PATH) --
+    #    stock Fedora ships the containers-common default in /usr/share
+    #    only, which containers/image reads happily and ostree never looks
+    #    at.
+    # 2. Its default must not be exactly [insecureAcceptAnything].
+    #    ostree-rs-ext refuses an ostree-image-signed pull outright when it
+    #    is -- is_default_insecure() reads the default and nothing else, so
+    #    a scoped rule for our own namespace does not save it. That is why
+    #    `rpm-ostree rebase ostree-image-signed:...` fails on a stock
+    #    policy with "specifies a default of `insecureAcceptAnything`;
+    #    refusing usage".
+    #
+    # So: default reject, every transport permissive by default through
+    # its "" scope -- which is exactly the behaviour the permissive
+    # default gave, for podman, distrobox and everything else -- and our
+    # own namespace requiring a signature, as before. Written to /etc,
+    # seeded from whichever copy the base actually has.
+    local policy_src policy_tmp
+    for policy_src in /etc/containers/policy.json \
+        /usr/etc/containers/policy.json /usr/share/containers/policy.json; do
+        [[ -f "$policy_src" ]] && break
+    done
+    [[ -f "$policy_src" ]] || return 1
+
+    policy_tmp="$(mktemp)"
+    jq '.default = [{"type": "reject"}]
+        | .transports.docker[""] = [{"type": "insecureAcceptAnything"}]
+        | .transports["containers-storage"][""] = [{"type": "insecureAcceptAnything"}]
+        | .transports["docker-daemon"][""] = [{"type": "insecureAcceptAnything"}]
+        | .transports["docker-archive"][""] = [{"type": "insecureAcceptAnything"}]
+        | .transports["oci"][""] = [{"type": "insecureAcceptAnything"}]
+        | .transports["oci-archive"][""] = [{"type": "insecureAcceptAnything"}]
+        | .transports["dir"][""] = [{"type": "insecureAcceptAnything"}]
+        | .transports.docker["ghcr.io/lorbuschris"] = [{
                 "type": "sigstoreSigned",
                 "keyPath": "/usr/lib/pki/containers/lorbuschris.pub",
                 "signedIdentity": {"type": "matchRepository"}
-            }]' "$policy" > "$policy_tmp"
-        install -m0644 "$policy_tmp" "$policy"
-        rm -f "$policy_tmp"
-        policy_patched=1
-    done
-    [[ "$policy_patched" -eq 1 ]]
+            }]' "$policy_src" > "$policy_tmp"
+    install -Dm0644 "$policy_tmp" /etc/containers/policy.json
+    # Keep the /usr/share copy in step, for anything that reads it directly
+    [[ -f /usr/share/containers/policy.json ]] &&
+        install -m0644 "$policy_tmp" /usr/share/containers/policy.json
+    rm -f "$policy_tmp"
 }
