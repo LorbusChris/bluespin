@@ -448,6 +448,18 @@ container form, with the same provenance chain as everything else here,
 verified before it becomes an ISO. Nothing updates from a `-live` tag —
 `bootc switch` targets stay the images in the table above.
 
+The ISO is published to the registry rather than attached to the
+release: a release asset must be under 2 GiB and these are 3-5, and
+compressing them buys 0.6% (the payload is an already-zstd-19
+squashfs). It is an OCI artifact like everything else here, signed with
+the same key, and the release carries its checksum and this:
+
+```bash
+oras pull ghcr.io/lorbuschris/bluespin-iso:45-amd64
+sha256sum -c bluespin-45-live-amd64.iso-CHECKSUM
+cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin-iso:45-amd64
+```
+
 Installing from that ISO runs Anaconda, which pulls the **channel
 alias** for the branch it was cut from — so a machine installed from
 stable's media follows `latest` across the next Fedora branch on its

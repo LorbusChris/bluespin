@@ -6,6 +6,14 @@
 # fastboot, and its install medium is the disk image from
 # build-disk.yml.
 #
+# The ISO itself is published to the registry as an OCI artifact and
+# signed there, because a release asset must be under 2 GiB and these
+# are 3 to 5 -- and compressing them buys 0.6%, the payload being an
+# already-zstd-19 squashfs. Bluefin solves this with a CDN of its own;
+# without one, the registry we already publish and sign everything else
+# to is the honest place for it. The release carries each ISO's checksum
+# and the command that fetches what it checksums.
+#
 # Each leg layers the container-native ISO contract onto the image it
 # builds from -- Anaconda, the livesys session, a live initramfs and
 # iso.yaml (`just live-image`, the Containerfile's live stage) -- and
@@ -197,6 +205,9 @@ jobs:
           # be careful when upgrading major versions
           cosign-release: 'v3.1.3'
 
+      - name: Install ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+
       # Titanoboa mounts the image as a container volume out of ROOT's
       # storage (sudo podman run --mount type=image) and pulls nothing
       # itself -- podman does not pull for an image volume, so the image
@@ -287,6 +298,49 @@ jobs:
       # a draft is how 45.20260825.1 went public with only a phone image
       # on it while these very legs were failing. `gh release upload`
       # touches assets and nothing else, drafts included.
+      # The ISO goes to the registry, not onto the release: a release
+      # asset must be under 2 GiB and a live ISO is 3-5, which is how the
+      # first release to reach this step lost four finished ISOs to HTTP
+      # 422. As an OCI artifact it is addressable by digest and signable
+      # with the same key as everything else the registry holds.
+      - name: Publish the ISO as an OCI artifact
+        id: artifact
+        env:
+          ISO_REF: ghcr.io/lorbuschris/${{ matrix.image_name }}-iso:${{ needs.plan-release.outputs.tag }}-${{ matrix.arch }}
+          ISO_PATH: ${{ steps.build.outputs.iso-dest }}
+        run: |
+          set -euo pipefail
+          iso="$(basename "${ISO_PATH}")"
+          cd "$(dirname "${ISO_PATH}")"
+          # Both files in one artifact, each with the media type that says
+          # what it is; oras reads the login docker/login-action wrote
+          oras push --artifact-type application/vnd.bluespin.installer \
+            "${ISO_REF}" \
+            "${iso}:application/vnd.efi.iso" \
+            "${iso}-CHECKSUM:text/plain"
+          # oras resolve, not skopeo inspect: skopeo refuses an artifact
+          # whose artifactType is not an image ("unsupported
+          # image-specific operation")
+          digest="$(oras resolve "${ISO_REF}")"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "published ${ISO_REF} (${digest})"
+
+      - name: Sign and verify the ISO artifact
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          DIGEST_REF: ghcr.io/lorbuschris/${{ matrix.image_name }}-iso@${{ steps.artifact.outputs.digest }}
+        run: |
+          set -euo pipefail
+          .github/scripts/retry.sh 3 30 \
+            cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "${DIGEST_REF}"
+          .github/scripts/retry.sh 3 30 \
+            cosign sign -y --new-bundle-format=false --use-signing-config=false "${DIGEST_REF}"
+          cosign verify --key cosign.pub "${DIGEST_REF}" > /dev/null
+          echo "signature verified for ${DIGEST_REF}"
+
+      # What the release carries: the checksum, and the command that
+      # fetches the thing it checksums
       - name: Upload release artifacts
         # A release event names its own release; a call or dispatch can
         # name one
@@ -295,12 +349,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
           ISO_PATH: ${{ steps.build.outputs.iso-dest }}
+          ISO_REF: ghcr.io/lorbuschris/${{ matrix.image_name }}-iso:${{ needs.plan-release.outputs.tag }}-${{ matrix.arch }}
+          DIGEST_REF: ghcr.io/lorbuschris/${{ matrix.image_name }}-iso@${{ steps.artifact.outputs.digest }}
         run: |
           set -euo pipefail
+          iso="$(basename "${ISO_PATH}")"
+          cat > "${ISO_PATH}-FETCH.txt" <<EOF
+          ${iso} is published as an OCI artifact -- it is larger than a
+          GitHub release asset may be.
+
+            oras pull ${ISO_REF}
+            sha256sum -c ${iso}-CHECKSUM
+
+          It carries the same signature as every bluespin image:
+
+            cosign verify --key cosign.pub ${DIGEST_REF}
+          EOF
           # --clobber: a re-run of a failed or partial release run must be
           # able to replace what an earlier attempt attached
           gh release upload "${RELEASE_TAG}" \
-            "${ISO_PATH}" "${ISO_PATH}-CHECKSUM" --clobber
+            "${ISO_PATH}-CHECKSUM" "${ISO_PATH}-FETCH.txt" --clobber
 
   # The pull-request path: read the completed build run's plan, map its
   # -installer flags to legs, and build each ISO from that leg's shared
