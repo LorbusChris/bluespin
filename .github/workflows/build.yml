@@ -60,8 +60,12 @@
 # The branch is the image tag -- bluespin:44, bluespin-dx:rawhide -- and the
 # default branch (DEFAULT_FEDORA_BRANCH in bluespin.env) also carries
 # `latest` and the dated tags it always had. Each branch's base is pinned in
-# bluespin.env. A dispatch can name the branches to build, which is how a
-# leg that is not in the regular list gets built by hand.
+# bluespin.env. A dispatch names the branches AND the platforms to build,
+# which is how a single leg gets rebuilt by hand -- through here rather
+# than by dispatching build-oci.yml directly, because everything that
+# happens to a published image afterwards (sign.yml above all) fires on
+# this workflow's completion and reads the plan it uploads. A leg built
+# any other way would publish unsigned.
 name: Build
 on:
   pull_request:
@@ -86,6 +90,11 @@ on:
         type: string
         required: false
         default: '["44", "45", "rawhide"]'
+      platforms:
+        description: 'Platforms to build, comma-separated: bluespin, bluespin-arm, dx, surface, fp5'
+        type: string
+        required: false
+        default: 'bluespin,bluespin-arm,dx,surface,fp5'
 
 # A labeled run adds legs to what already ran for this SHA -- it must
 # not cancel the run it is extending (the plan job reuses those legs),
@@ -124,6 +133,7 @@ jobs:
           ACTION: ${{ github.event.action }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           DISPATCH_BRANCHES: ${{ inputs.fedora_branches }}
+          DISPATCH_PLATFORMS: ${{ inputs.platforms }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_ID: ${{ github.run_id }}
@@ -271,21 +281,24 @@ jobs:
             fi
 
           elif [[ "${EVENT}" == "workflow_dispatch" ]]; then
-            # The branches input drives the x86 standard and variant
-            # legs, and the arm leg for every requested branch that has
-            # arm support -- 45 always, rawhide on demand, never 44
-            # (not arm's stable, no consumer); fp5 keeps the push shape
+            # Two inputs, both meant: which branches, and which legs. A
+            # variant layers FROM the published bluespin image on a
+            # dispatch exactly as it does on a push, so `dx` on its own
+            # is a complete build -- rebuilding one variant against a
+            # base that is already published does not rebuild the base.
+            # Arm legs exist for 45 and rawhide only: 44 is not arm's
+            # stable branch and nothing consumes a 44-arm image.
+            wants() { [[ ",${DISPATCH_PLATFORMS// /}," == *",$1,"* ]]; }
             for b in $(jq -r '.[]' <<< "${DISPATCH_BRANCHES}"); do
-              add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
-              add dx "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
-              add surface "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              wants bluespin && add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              wants dx && add dx "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
+              wants surface && add surface "{\"fedora_branch\":\"${b}\",\"arch\":\"amd64\"}"
               if [[ "${b}" == "45" || "${b}" == "rawhide" ]]; then
-                add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"arm64\"}"
+                wants bluespin-arm && add bluespin "{\"fedora_branch\":\"${b}\",\"arch\":\"arm64\"}"
+                wants fp5 && add fp5 "{\"fedora_branch\":\"${b}\",\"arch\":\"arm64\"}"
               fi
             done
-            jq -e 'index({"fedora_branch":"45","arch":"arm64"})' <<< "${bluespin}" > /dev/null \
-              || add bluespin '{"fedora_branch":"45","arch":"arm64"}'
-            add fp5 '{"fedora_branch":"45","arch":"arm64"}'
+            true
           else
             # Pushes and the nightly: exactly what ships. x86 builds the
             # branched releases, arm builds its stable branch alone (44
