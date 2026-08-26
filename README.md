@@ -166,8 +166,23 @@ sudo bootc switch ghcr.io/lorbuschris/bluespin:latest
 
 Images are signed with [cosign](https://github.com/sigstore/cosign); the public
 key is [`cosign.pub`](cosign.pub). The image ships a
-`/etc/containers/policy.json` entry so updates from `ghcr.io/lorbuschris` are
-signature-verified on-device. To verify manually:
+`/etc/containers/policy.json` that requires a valid signature for anything
+from `ghcr.io/lorbuschris` and leaves every other source exactly as
+permissive as it was. Its default is `reject` rather than
+`insecureAcceptAnything` for a specific reason: ostree refuses a signed
+pull outright when the default is permissive, reading the default and
+nothing else, so a scoped rule alone would leave `bootc switch
+--enforce-container-sigpolicy` and `rpm-ostree rebase
+ostree-image-signed:` failing with *"specifies a default of
+`insecureAcceptAnything`; refusing usage"*. To rebase onto the verified
+transport:
+
+```bash
+sudo bootc switch --enforce-container-sigpolicy ghcr.io/lorbuschris/bluespin-dx:latest
+# or: sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/lorbuschris/bluespin-dx:latest
+```
+
+To verify manually:
 
 ```bash
 cosign verify --key cosign.pub ghcr.io/lorbuschris/bluespin:latest
