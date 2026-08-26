@@ -26,6 +26,12 @@ inputs:
   artifact-suffix:
     description: Suffix for the archive and artifact name, e.g. a tag or pr-57
     required: true
+  archive-ext:
+    description: >-
+      Archive extension `just artifacts` produced; follows the Justfile's
+      disk_archive_ext, which decides the format
+    required: false
+    default: tar.xz
 
 runs:
   using: composite
@@ -65,17 +71,18 @@ runs:
       env:
         IMAGE_NAME: ${{ inputs.image-name }}
         SUFFIX: ${{ inputs.artifact-suffix }}
+        EXT: ${{ inputs.archive-ext }}
       run: |
         # The sudo runs above leave root-owned temp scripts here, which the
         # unprivileged just below cannot write (pocketblue 36e77ba).
         sudo rm -rf "/run/user/$(id -u)/just"
         just artifacts
-        mv "${IMAGE_NAME}.7z" "${IMAGE_NAME}-${SUFFIX}.7z"
+        mv "${IMAGE_NAME}.${EXT}" "${IMAGE_NAME}-${SUFFIX}.${EXT}"
         ls -l out/images/
 
     - name: Upload artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: ${{ inputs.image-name }}-${{ inputs.artifact-suffix }}
-        path: ${{ inputs.image-name }}-${{ inputs.artifact-suffix }}.7z
+        path: ${{ inputs.image-name }}-${{ inputs.artifact-suffix }}.${{ inputs.archive-ext }}
         compression-level: 0

@@ -4,7 +4,7 @@
 
 set -uexo pipefail
 
-which 7z
+which tar
 
 # Start clean so a failed or repeated run does not abort on mkdir or archive
 # stale halves from the previous attempt
@@ -29,5 +29,14 @@ export OUT_PATH DEVICE_PATH
 "$DEVICE_PATH/build-aux/artifacts.sh"
 
 cd out
-# shellcheck disable=SC2086  # ARGS_7Z is a deliberate multi-word option string
-7z a -mx=9 $ARGS_7Z "../${ARCHIVE_NAME}.7z" .
+# tar, not 7z: what ships here is a directory of raw partition images and
+# the flash scripts that write them, and tar is the one container that
+# keeps the scripts executable, streams, and -- with --sparse -- never
+# reads the holes in a raw image at all. The compressor stays LZMA2, as
+# 7z's was: the archive is 1.8 GiB against a 2 GiB release-asset limit,
+# so this is no place to trade ratio for convenience (gzip or bzip2
+# would push it over and into being split). DISK_ARCHIVE_COMPRESSOR
+# takes anything that reads stdin, e.g. 'zstd -19 -T0 --long=27' for a
+# much faster build at a slightly larger archive.
+tar --sparse --use-compress-program="${DISK_ARCHIVE_COMPRESSOR}" \
+    -cf "../${ARCHIVE_NAME}.${DISK_ARCHIVE_EXT}" .

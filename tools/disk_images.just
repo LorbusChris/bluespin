@@ -62,7 +62,8 @@ artifacts $device=disk_device $archive_name=image_name:
     set -euo pipefail
 
     export DEVICE_PATH=devices/${device}
-    export ARGS_7Z="${disk_compression_7z}"
+    export DISK_ARCHIVE_COMPRESSOR="${disk_archive_compressor}"
+    export DISK_ARCHIVE_EXT="${disk_archive_ext}"
     export SCRIPTS=tools/postprocess
     export ARCHIVE_NAME="${archive_name}"
 

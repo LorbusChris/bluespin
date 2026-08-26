@@ -23,7 +23,12 @@ export image_builder_image := env_var("IMAGE_BUILDER_IMAGE")
 # dictionary needs an order of magnitude more RAM to compress, single-threaded,
 # and would thrash a hosted runner. The unused partition space is zeros and
 # compresses to nothing either way, so the archive tracks content size.
-export disk_compression_7z := env("DISK_COMPRESSION_7Z", "-mmt=on")
+# The flashable archive: LZMA2 as 7z used to do it, in a tar so the
+# flash scripts keep their mode and the raw images keep their holes.
+# Both are overridable together -- e.g. "zstd -19 -T0 --long=27" with
+# "tar.zst" -- for a faster build at a slightly larger archive.
+export disk_archive_compressor := env("DISK_ARCHIVE_COMPRESSOR", "xz -9 -T0")
+export disk_archive_ext := env("DISK_ARCHIVE_EXT", "tar.xz")
 
 import "tools/disk_images.just"
 
