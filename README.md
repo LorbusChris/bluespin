@@ -45,6 +45,19 @@ phone on top of it, and the flashable artifact. Attaching a label starts
 the widened run immediately. The full table lives in
 [build.yml](.github/workflows/build.yml)'s header.
 
+To build a leg by hand, dispatch
+[`Build`](.github/workflows/build.yml) with the branches and the
+platforms you want -- `dx` alone rebuilds just the developer layer
+against the already-published bluespin image it layers on:
+
+```bash
+gh workflow run Build -f fedora_branches='["44"]' -f platforms=dx
+```
+
+Dispatch `Build`, not `Build OCI` directly: signing, scanning and the
+rest fire on `Build`'s completion and read the plan it publishes, so a
+leg built any other way would publish unsigned.
+
 ## What the images carry
 
 - **Full multimedia** from RPMFusion: real `ffmpeg` and `fdk-aac`, VA-API
