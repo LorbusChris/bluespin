@@ -84,6 +84,12 @@ leg built any other way would publish unsigned.
   `ujust tailscale-operator` lets your user drive it without sudo.
 - **A signed `v4l2loopback`** virtual camera on every platform and branch,
   built from the vendored submodule in a throwaway Containerfile stage.
+- **Containerized CLIs** as shell functions over digest-pinned images,
+  pulled only on first use and always yielding to a real binary on `PATH`
+  ([97-bluespin-container-clis.sh](files/etc/profile.d/97-bluespin-container-clis.sh)):
+  `oras` on every edition, since install media is published as OCI
+  artifacts and Fedora packages no oras, plus the developer set
+  (`kubectl`, `helm`, `k9s`, `flux`, `argocd`, `grype`, `syft`).
 
 ## Secure Boot
 
@@ -481,6 +487,9 @@ release: a release asset must be under 2 GiB and these are 3-5, and
 compressing them buys 0.6% (the payload is an already-zstd-19
 squashfs). It is an OCI artifact like everything else here, signed with
 the same key, and the release carries its checksum and this:
+
+The images ship `oras` for exactly this (see above), so on bluespin it is
+just:
 
 ```bash
 oras pull ghcr.io/lorbuschris/bluespin-iso:45-amd64
