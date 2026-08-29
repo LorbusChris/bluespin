@@ -80,14 +80,19 @@ DX_PACKAGES=(
     tiptop
     trace-cmd
 
-    # The CLI set Bluefin's bluefin-cli recipe fetches from Homebrew, as
-    # Fedora packages instead. Starship is installed separately for every
-    # platform (build_files/starship.sh).
+    # Command line. Most of this is the set Bluefin's bluefin-cli recipe
+    # fetches from Homebrew, as Fedora packages instead; starship is
+    # installed separately for every platform (build_files/starship.sh).
     bat
     chezmoi
     direnv
     fd-find
     gh
+    git
+    git-credential-libsecret
+    git-subtree
+    git-svn
+    glab
     ripgrep
     # tldr rather than tealdeer, Bluefin's pick: rust-tealdeer was retired
     # from Fedora before 45 branched, and tldr is the same command from the
@@ -95,24 +100,74 @@ DX_PACKAGES=(
     tldr
     trash-cli
     uutils-coreutils
+    vim-enhanced
     yq
     zoxide
 
-    # Development odds and ends
-    android-tools
-    dbus-x11
+    # The C toolchain, as product. (The v4l2loopback build needs one too, but
+    # that happens in the Containerfile's kernel-builder stage and never
+    # touches this image -- see build_files/kernel-builder.sh.)
+    binutils
+    gcc
+    gcc-c++
+    gdb
+    glibc-devel
+    kernel-headers
+    libstdc++-devel
+    libxcrypt-devel
+    make
+    setools-console
+
+    # Packaging and image building
+    copr-cli
+    fedora-packager
+    fedora-packager-kerberos
     flatpak-builder
     genisoimage
-    git-subtree
-    git-svn
+    git-evtag
     osbuild-selinux
+    udica
+
+    # Network diagnostics
+    net-tools
+    tcpdump
+    traceroute
+    usbip
+    waypipe
+    wireshark
+
+    # Low-level hardware probing
+    evtest
+    fxload
+    i2c-tools
+    igt-gpu-tools
+    lshw
+    tio
+
+    # Camera and capture
+    dvb-tools
+    libcamera-gstreamer
+    libcamera-tools
+    v4l-utils
+
+    # Phones. Mobile messaging plumbing included: the MMS daemon and the
+    # libpurple SMS plugin that Chatty (dx catalog) drives over D-Bus when a
+    # modem is attached.
+    android-tools
+    feedbackd
+    mmsd-tng
+    pmbootstrap
+    purple-mm-sms
+
+    # Odds and ends
+    cascadia-code-fonts
+    dbus-x11
+    nextcloud-client-nautilus
     p7zip
     p7zip-plugins
-    udica
     util-linux-script
     wtype
     ydotool
-    cascadia-code-fonts
 )
 
 # --exclude: virt-manager Recommends (libvirt-daemon-kvm or
@@ -130,65 +185,6 @@ dnf -y install \
 if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
     dnf -y install rocm-hip rocm-opencl rocm-smi rocminfo
 fi
-
-# bluespin's own additions, as opposed to everything above, which mirrors
-# Bluefin's dx layer: packaging and kernel work, phone and capture hardware.
-BLUESPIN_DX_PACKAGES=(
-    # The classics the Bluefin base used to provide for everyone; here they
-    # are developer tooling
-    git
-    vim-enhanced
-
-    # Network diagnostics
-    tcpdump
-    traceroute
-    net-tools
-    usbip
-    waypipe
-
-    # The C toolchain, as product. (The v4l2loopback build needs one too, but
-    # that happens in the Containerfile's kernel-builder stage and never
-    # touches this image -- see build_files/kernel-builder.sh.)
-    gcc
-    gcc-c++
-    binutils
-    make
-    glibc-devel
-    libstdc++-devel
-    kernel-headers
-    libxcrypt-devel
-    setools-console
-
-    # Low-level hardware probing
-    lshw
-    i2c-tools
-    evtest
-    fxload
-    igt-gpu-tools
-    libcamera-tools
-    libcamera-gstreamer
-
-    copr-cli
-    fedora-packager
-    fedora-packager-kerberos
-    gdb
-    git-credential-libsecret
-    git-evtag
-    glab
-    pmbootstrap
-    wireshark
-    dvb-tools
-    v4l-utils
-    feedbackd
-    # Mobile messaging plumbing: the MMS daemon and the libpurple SMS plugin
-    # that Chatty (dx catalog) drives over D-Bus when a modem is attached
-    mmsd-tng
-    purple-mm-sms
-    nextcloud-client-nautilus
-    tio
-)
-
-dnf -y install "${BLUESPIN_DX_PACKAGES[@]}"
 
 dnf -y copr enable lorbus/calls
 dnf -y install calls
