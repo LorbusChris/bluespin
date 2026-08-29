@@ -174,6 +174,7 @@ BLUESPIN_DX_PACKAGES=(
     gdb
     git-credential-libsecret
     git-evtag
+    glab
     pmbootstrap
     wireshark
     dvb-tools
