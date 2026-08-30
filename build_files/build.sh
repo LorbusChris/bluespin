@@ -51,6 +51,23 @@ remove_if_installed() {
 # 1. The base: take what it provides, supply what it does not.
 ############################################################################
 
+# ostree 2026.3, what the base ships, rejects static deltas it should accept
+# (ostreedev/ostree#3635), so Flathub apps fail to update every run; 2026.4
+# reverts it (#3645). Ask for that version and reach into updates-testing only
+# while the ordinary repos cannot answer -- once the update is promoted this
+# resolves from updates by itself, so there is no pin to drop and no day this
+# has to be touched. Delete the gate whenever; by then it does nothing.
+# The revert reopens GHSA-7cgc-gp99-6jmm, a medium-severity decompression-bomb
+# DoS, as it does for every F44 machine once 2026.4 is stable.
+OSTREE_MIN_VERSION=2026.4
+ostree_repo=()
+if [ -z "$(dnf -q repoquery --whatprovides "ostree >= ${OSTREE_MIN_VERSION}" \
+        --qf '%{evr}' 2> /dev/null)" ]; then
+    ostree_repo=(--enablerepo=updates-testing)
+fi
+dnf -y install "${ostree_repo[@]}" \
+    "ostree >= ${OSTREE_MIN_VERSION}" "ostree-libs >= ${OSTREE_MIN_VERSION}"
+
 # Flatpaks are installed at boot from /usr/share/flatpak/preinstall.d. Note:
 # preinstall tracks these entries, so removing one later uninstalls the app
 # from users' systems. One system set for every platform; everything else is
