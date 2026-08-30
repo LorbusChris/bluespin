@@ -284,6 +284,19 @@ log; the files are the authority):
   distinguish in `VARIANT_ID`, which is what Workstation does.
 - `uupd.timer` is enabled at build: the RPM ships no preset, so the one
   updater never actually ran on any earlier build.
+- `ostree` and `ostree-libs` are required at **2026.4 or newer**. 2026.3, which
+  the base ships, rejects static deltas it should accept
+  ([ostree#3635](https://github.com/ostreedev/ostree/issues/3635)), so Flathub
+  apps failed to update on every run;
+  [ostree#3645](https://github.com/ostreedev/ostree/pull/3645) reverts it. The
+  build asks for that version and enables `updates-testing` only while the
+  ordinary repos cannot answer, so once the update is promoted it resolves from
+  `updates` by itself — there is no pin to drop and no day the build has to be
+  touched. The gate can be deleted whenever; by then it does nothing. The
+  revert reopens
+  [GHSA-7cgc-gp99-6jmm](https://github.com/ostreedev/ostree/security/advisories/GHSA-7cgc-gp99-6jmm),
+  a medium-severity decompression-bomb DoS, as it does for every F44 machine
+  once 2026.4 is stable.
 - `distrobox` and `powerstat` are explicit packages: both used to arrive
   only as weak dependencies (uupd's and ublue-os-just's Recommends), which
   the ujust vendoring would otherwise have silently dropped.
