@@ -34,6 +34,10 @@ postprocess $device=disk_device:
     source devices/${device}/build-aux/device.conf
     export CONF_INSTALL_DTB=${install_dtb:-false}
     export CONF_SPLIT_PARTITIONS=${split_partitions:-false}
+    if [ "${CONF_INSTALL_DTB}" = "true" ]; then
+        : "${dtb_name:?devices/${device}/build-aux/device.conf must set dtb_name when install_dtb is true}"
+        export CONF_DTB_NAME=$dtb_name
+    fi
 
     export OUTPUT=./output
     export SCRIPTS=tools/postprocess
