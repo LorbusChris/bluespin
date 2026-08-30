@@ -22,8 +22,8 @@ if [ "$size" -ne "$esp_size_bytes" ]; then
     exit 1
 fi
 
-# install-dtb.sh copies the kernel's whole dtb tree onto the ESP; u-boot needs
-# this device's blob somewhere in it, wherever the kernel package lays it out.
+# install-dtb.sh puts this device's blob on the ESP at whatever path the kernel
+# package filed it under, so look for it rather than assuming the layout.
 mnt=$(mktemp -d)
 mount -o ro,loop "$esp" "$mnt"
 found=$(find "$mnt/dtb" -name "$dtb_name" -print -quit 2>/dev/null || true)
