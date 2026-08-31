@@ -81,9 +81,15 @@ concurrency:
   # The file's own name as a literal, not github.workflow: under
   # workflow_call that context names the CALLER, and the release
   # workflow's two media calls must not land in one group and cancel
-  # each other
-  group: build-installer-${{ github.ref || github.run_id }}
-  cancel-in-progress: true
+  # each other.
+  #
+  # A release's media is keyed on its tag, and never cancelled. Keying
+  # everything on the ref put the release call and the workflow_run
+  # trigger -- which fires on every Build that finishes on main -- in one
+  # group, so a Build landing mid-release could evict ISOs a release is
+  # waiting on. Everything else still supersedes per ref.
+  group: build-installer-${{ inputs.release_tag || github.ref || github.run_id }}
+  cancel-in-progress: ${{ !inputs.release_tag }}
 
 jobs:
   # Release and dispatch legs come from the registry, not a table: the
