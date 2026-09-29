@@ -34,7 +34,7 @@ jobs:
   plan:
     name: plan
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: read
     outputs:
@@ -78,7 +78,7 @@ jobs:
   scan:
     needs: plan
     if: ${{ needs.plan.outputs.legs != '[]' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       actions: read
@@ -168,7 +168,7 @@ jobs:
       # main is the state worth tracking
       - name: Upload vulnerability report to code scanning
         if: ${{ needs.plan.outputs.event != 'pull_request' }}
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           sarif_file: grype.sarif
           category: grype-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}
