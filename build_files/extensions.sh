@@ -57,10 +57,8 @@ BAZAAR_INTEGRATION_COMMIT=619ecbc6408d789dedfcbb412879bcc2d5fa24dc
 # renovate: datasource=git-refs depName=https://github.com/bazaar-org/bazaar-companion branch=main
 BAZAAR_INTEGRATION_UPSTREAM_COMMIT=3bb9134985343ffd1993520eb37c90e113bfb09b
 
-# renovate: datasource=git-refs depName=https://github.com/LorbusChris/gnome-shell-extension-caffeine branch=master
-CAFFEINE_COMMIT=73ce12be75f2ea3fe08dc9215f9ecdc87f9778c0
-# renovate: datasource=github-tags depName=eonpatapon/gnome-shell-extension-caffeine
-CAFFEINE_UPSTREAM_REF=v60
+# renovate: datasource=git-refs depName=https://github.com/eonpatapon/gnome-shell-extension-caffeine branch=master
+CAFFEINE_COMMIT=be18b3558a250d672a7108f01a8dcf55c0935bc6
 
 # renovate: datasource=git-refs depName=https://gitlab.gnome.org/lorbus/gnome-shell-extensions branch=main
 GNOME_SHELL_EXTENSIONS_COMMIT=c4f2f666d1c0f69ff850dc9991576137b0476c7a
@@ -88,17 +86,15 @@ SEARCH_LIGHT_COMMIT=846ca1d2970d4a5f71e90c8f4ac8f6ed430a9cd0
 # renovate: datasource=git-refs depName=https://github.com/icedman/search-light branch=main
 SEARCH_LIGHT_UPSTREAM_COMMIT=4e93e0e3e2fba8512dfd588177b7a6a2a71c9f1e
 
-# renovate: datasource=git-refs depName=https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not branch=main
-WEATHER_OR_NOT_COMMIT=b922e8991029e4c288c58afff850c2bcbbcda524
-# renovate: datasource=gitlab-tags depName=somepaulo/weather-or-not registryUrl=https://gitlab.gnome.org
-WEATHER_OR_NOT_UPSTREAM_REF=v50
+# renovate: datasource=git-refs depName=https://gitlab.gnome.org/somepaulo/weather-or-not branch=main
+WEATHER_OR_NOT_COMMIT=690946752621304ad1e0edd6a1eba26d8d2c9913
 
 # The watcher variables, expanded once so shellcheck sees them used --
 # Renovate reads those lines; the build does not
 : "${APPINDICATOR_REF}" "${BAZAAR_INTEGRATION_UPSTREAM_COMMIT}" \
-    "${CAFFEINE_UPSTREAM_REF}" "${GNOME_SHELL_EXTENSIONS_UPSTREAM_REF}" \
+    "${GNOME_SHELL_EXTENSIONS_UPSTREAM_REF}" \
     "${GRADIA_INTEGRATION_UPSTREAM_COMMIT}" "${NEKOTORCH_UPSTREAM_REF}" \
-    "${SEARCH_LIGHT_UPSTREAM_COMMIT}" "${WEATHER_OR_NOT_UPSTREAM_REF}"
+    "${SEARCH_LIGHT_UPSTREAM_COMMIT}"
 
 # Fetch one pinned repository at an exact commit into dest, as the forge's
 # archive tarball: the commit hash is the whole address, so the fetch is as
@@ -258,7 +254,7 @@ install_vendored_extensions() {
         "${APPINDICATOR_COMMIT}" "${src}/appindicator"
     fetch_pinned https://github.com/LorbusChris/bazaar-companion \
         "${BAZAAR_INTEGRATION_COMMIT}" "${src}/bazaar-integration"
-    fetch_pinned https://github.com/LorbusChris/gnome-shell-extension-caffeine \
+    fetch_pinned https://github.com/eonpatapon/gnome-shell-extension-caffeine \
         "${CAFFEINE_COMMIT}" "${src}/caffeine"
     fetch_pinned https://gitlab.gnome.org/lorbus/gnome-shell-extensions \
         "${GNOME_SHELL_EXTENSIONS_COMMIT}" "${src}/gnome-shell-extensions"
@@ -268,7 +264,7 @@ install_vendored_extensions() {
         "${NEKOTORCH_COMMIT}" "${src}/nekotorch"
     fetch_pinned https://github.com/LorbusChris/search-light \
         "${SEARCH_LIGHT_COMMIT}" "${src}/search-light"
-    fetch_pinned https://gitlab.gnome.org/lorbus/gnome-shell-extension-weather-or-not \
+    fetch_pinned https://gitlab.gnome.org/somepaulo/weather-or-not \
         "${WEATHER_OR_NOT_COMMIT}" "${src}/weather-or-not"
 
     # Start from our copy and nothing else: cp -r into an existing directory
