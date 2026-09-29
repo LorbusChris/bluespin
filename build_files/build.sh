@@ -357,7 +357,15 @@ getcap /usr/bin/nethogs | grep -q 'cap_net_raw'
 # unowned files its build copies in; installing the package takes ownership
 # of them, so every branch ends up with the same rules from the same source.
 dnf -y copr enable ublue-os/packages
-dnf -y install ublue-os-udev-rules oversteer-udev
+dnf -y install oversteer-udev
+# ublue-os-udev-rules is noarch and ublue has not built it since 45
+# branched -- the fedora-45 chroots hold a "forked" placeholder, no RPM --
+# so when a release's own chroot cannot answer, take 44's: the same bits
+# `latest` ships. Dead code once ublue rebuilds for that release.
+if ! dnf -y install ublue-os-udev-rules; then
+    dnf -y copr enable ublue-os/packages "fedora-44-$(uname -m)"
+    dnf -y install ublue-os-udev-rules
+fi
 dnf -y copr disable ublue-os/packages
 
 # Our own COPR extension. Enable/install/disable so no COPR is left active in
