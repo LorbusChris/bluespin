@@ -100,7 +100,7 @@ jobs:
   plan-release:
     name: plan (release)
     if: ${{ github.event_name != 'workflow_run' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       legs: ${{ steps.map.outputs.legs }}
       tag: ${{ steps.map.outputs.tag }}
@@ -382,7 +382,7 @@ jobs:
   plan-pr:
     name: plan (pr)
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: read
     outputs:

@@ -12,14 +12,14 @@
 # The images are pinned tag@digest and Renovate follows them (the *_IMAGE=
 # regex manager also scans this file).
 
-KUBECTL_IMAGE=registry.k8s.io/kubectl:v1.36.4@sha256:b8d523e7b8cdc5e3caa0f8891ee9f504abf137dec786e6e0ddd33e4f272c2f13
-HELM_IMAGE=docker.io/alpine/helm:4.2.4@sha256:76c375eed56144c68d6197c55bc5a4552fb42002190b796729901cbab3ae6e51
+KUBECTL_IMAGE=registry.k8s.io/kubectl:v1.37.1@sha256:b7cab618e281b1ee7484e7b706a96e2135fbb6e072c2a573a7dab4e87d7f2385
+HELM_IMAGE=docker.io/alpine/helm:4.3.0@sha256:a6cf54599ccb99d90cf0712b30f03fdb3cab062e6b94e0418cc4db7e8a1464b2
 K9S_IMAGE=docker.io/derailed/k9s:v0.50.18@sha256:988dbcf194c368259ffb8f43472c4abbc3f1a09b68411d1061a6d22e17cd3eb5
-FLUX_IMAGE=ghcr.io/fluxcd/flux-cli:v2.9.4@sha256:5260c79fb1b744c78755d98bcb271971c93e4ea214623c3f9f96ff59536d0398
-ARGOCD_IMAGE=quay.io/argoproj/argocd:v3.5.1@sha256:0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8
-GRYPE_IMAGE=docker.io/anchore/grype:v0.117.0@sha256:ddf9e9f204049f3a4a0955ef70873cabab6a31432125ad4f20a490b54950a253
-SYFT_IMAGE=docker.io/anchore/syft:v1.51.0@sha256:678bfa565b60f747aac0f8e964fe5588a24445b8d0a480e91f6efd70020dfbb0
-ORAS_IMAGE=ghcr.io/oras-project/oras:v1.3.0@sha256:6ce045ce069a89934d6666b8b49f9c4c0145201bd6de6dbe2aee267814c55468
+FLUX_IMAGE=ghcr.io/fluxcd/flux-cli:v2.9.5@sha256:704d5529535570a495249b643159c93a9aa88ffca07813c974a54b7ba6edbd86
+ARGOCD_IMAGE=quay.io/argoproj/argocd:v3.5.3@sha256:dd3f47d5a5e4da563a7a398506e892481b358a7cec50abdf320c71aa55904bfa
+GRYPE_IMAGE=docker.io/anchore/grype:v0.119.0@sha256:8c2c9234a345577a6d321a4753aa3ee1276d8975c8452d2344a56b57733ecad3
+SYFT_IMAGE=docker.io/anchore/syft:v1.52.0@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02
+ORAS_IMAGE=ghcr.io/oras-project/oras:v1.3.4@sha256:f7bc056d54d97baa399414ed5048ecc67c3371b750d4bbce1d871827a5758179
 
 # host network so cluster endpoints resolve as they would natively; the kube
 # config mounted read-write (context switching writes it) but created first,

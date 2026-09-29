@@ -75,7 +75,7 @@ jobs:
   plan-release:
     name: plan (release)
     if: ${{ github.event_name != 'workflow_run' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       tag: ${{ steps.map.outputs.tag }}
       build: ${{ steps.map.outputs.build }}
@@ -112,7 +112,7 @@ jobs:
     # 24.04, NOT 26.04. pocketblue moved every job to 26.04-arm and then moved
     # the disk-image job specifically back (pocketblue d729297); the container
     # jobs stayed. Do not rediscover that.
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
 
     permissions:
       # write, not read: the optional release-asset upload at the end attaches
@@ -190,7 +190,7 @@ jobs:
   plan-pr:
     name: plan (pr)
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: read
     outputs:
@@ -226,7 +226,7 @@ jobs:
     needs: plan-pr
     if: ${{ needs.plan-pr.outputs.legs != '[]' }}
     # 24.04, NOT 26.04 -- see the note on the disk job above
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
       actions: read

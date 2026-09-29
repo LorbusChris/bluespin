@@ -49,8 +49,8 @@ FEDORA_EXTENSIONS=(
 # be rebased or retired. Merging such a bump is only an acknowledgement.
 #
 # renovate: datasource=github-tags depName=ubuntu/gnome-shell-extension-appindicator
-APPINDICATOR_REF=v65
-APPINDICATOR_COMMIT=bd6775ad627117d8397d82403c650e753a5514c1
+APPINDICATOR_REF=v66
+APPINDICATOR_COMMIT=52da5222a17f7a862e8a47d2bc523f29abf59964
 
 # renovate: datasource=git-refs depName=https://github.com/LorbusChris/bazaar-companion branch=main
 BAZAAR_INTEGRATION_COMMIT=619ecbc6408d789dedfcbb412879bcc2d5fa24dc
@@ -63,7 +63,7 @@ CAFFEINE_COMMIT=be18b3558a250d672a7108f01a8dcf55c0935bc6
 # renovate: datasource=git-refs depName=https://gitlab.gnome.org/lorbus/gnome-shell-extensions branch=main
 GNOME_SHELL_EXTENSIONS_COMMIT=c4f2f666d1c0f69ff850dc9991576137b0476c7a
 # renovate: datasource=gitlab-tags depName=GNOME/gnome-shell-extensions registryUrl=https://gitlab.gnome.org
-GNOME_SHELL_EXTENSIONS_UPSTREAM_REF=50.3
+GNOME_SHELL_EXTENSIONS_UPSTREAM_REF=51.0
 
 # renovate: datasource=git-refs depName=https://github.com/LorbusChris/gradia-capture branch=master
 GRADIA_INTEGRATION_COMMIT=f3da59525e797ee7d2d3e0145eb9979c176e0119
@@ -75,7 +75,7 @@ GRADIA_INTEGRATION_UPSTREAM_COMMIT=f70a2127d0a9acc3c9d4d8198361fc9f4e14818f
 # last main commit that declared 50, with no Renovate line to bump it off it.
 MOSAICWM_50_COMMIT=d6c7804de4a84aca428ca27df565eee68761e6ab
 # renovate: datasource=git-refs depName=https://github.com/CleoMenezesJr/MosaicWM branch=main
-MOSAICWM_51_COMMIT=b7c5a9e01193b9ec193479da9581e6bf98d685e3
+MOSAICWM_51_COMMIT=c255a4840523463a1e43f059aa82ab82a845ea8d
 
 # renovate: datasource=git-refs depName=https://gitlab.com/lorbus42/NekoTorch branch=master
 NEKOTORCH_COMMIT=9a76e88d7ded4c587a5ac88b47fe607e5803c77a
