@@ -18,6 +18,15 @@ set -xeuo pipefail
 source /ctx/build_files/fp5_device.sh
 
 GNOME_MOBILE_REPO='copr:copr.fedorainfracloud.org:group_mobility:gnome-mobile'
+# On 45 the stack comes from the rawhide chroot: MobileShell has not rebased
+# onto 51.0, so @mobility/gnome-mobile builds nothing for 45 (its mutter and
+# gsd there are forked rawhide RPMs already), and the rawhide set installs
+# cleanly on 45. Per-command setopt, so the shipped repo file stays canonical.
+# Delete once fedora-45 carries a gnome-shell of its own.
+gnome_mobile_from=()
+if [[ "$(rpm -E %fedora)" == 45 ]]; then
+    gnome_mobile_from=(--setopt="${GNOME_MOBILE_REPO}.baseurl=https://download.copr.fedorainfracloud.org/results/@mobility/gnome-mobile/fedora-rawhide-$(uname -m)/")
+fi
 
 ############################################################################
 # Device files first: pure copies, they cost a second, and they supply both
@@ -34,7 +43,7 @@ fp5_install_device_files
 # package phases means a branch without one fails while the build is
 # seconds old rather than after the full aarch64 package work.
 ############################################################################
-if ! dnf repoquery --repo="${GNOME_MOBILE_REPO}" --qf '%{name}\n' gnome-shell 2>/dev/null | grep -qx gnome-shell; then
+if ! dnf "${gnome_mobile_from[@]}" repoquery --repo="${GNOME_MOBILE_REPO}" --qf '%{name}\n' gnome-shell 2>/dev/null | grep -qx gnome-shell; then
     echo "::error::@mobility/gnome-mobile publishes no gnome-shell for f$(rpm -E %fedora). Nothing to build."
     exit 1
 fi
@@ -74,7 +83,9 @@ dnf -y remove gnome-classic-session gnome-tour
 # resolver, turning that dependency into "nothing provides" and silently
 # skipping gnome-shell as broken. With the Fedora repos visible the
 # dependency resolves, and the three named packages still land on the mobile
-# builds because those out-version Fedora's.
+# builds because the repo file ranks gnome-mobile at priority 98, ahead of
+# Fedora's 99 -- on 45 they no longer out-version Fedora's, and without the
+# priority the sync would pick stock 51.0.
 #
 # allow_vendor_change: replacing Fedora's shell with the COPR build IS a
 # vendor change, which newer dnf5 blocks by default -- the same silent
@@ -82,7 +93,7 @@ dnf -y remove gnome-classic-session gnome-tour
 # below would catch it, but red-for-a-known-reason is just a worse
 # spelling of this setopt.
 ############################################################################
-dnf -y distro-sync --enablerepo="${GNOME_MOBILE_REPO}" --allowerasing \
+dnf -y "${gnome_mobile_from[@]}" distro-sync --enablerepo="${GNOME_MOBILE_REPO}" --allowerasing \
     --setopt=allow_vendor_change=true \
     gnome-shell mutter gnome-settings-daemon
 
