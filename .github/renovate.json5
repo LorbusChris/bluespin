@@ -7,7 +7,10 @@
     // human-gated bump simply waits for the human.
     'group:all',
   ],
-  rebaseWhen: 'never',
+  // Rebuild the one grouped branch whenever main moves past it. Under
+  // `never` it outlived its own merged PR -- fully merged, never deleted,
+  // no diff against main -- and Renovate opened nothing for a month.
+  rebaseWhen: 'behind-base-branch',
   // One submodule remains: kmods/v4l2loopback. Renovate's submodule manager
   // is off by default; it follows the tracked branch in .gitmodules.
   'git-submodules': {

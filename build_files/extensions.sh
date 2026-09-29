@@ -72,10 +72,11 @@ GRADIA_INTEGRATION_COMMIT=f3da59525e797ee7d2d3e0145eb9979c176e0119
 # renovate: datasource=git-refs depName=https://github.com/AlexanderVanhee/gradia-capture branch=master
 GRADIA_INTEGRATION_UPSTREAM_COMMIT=f70a2127d0a9acc3c9d4d8198361fc9f4e14818f
 
-# Mosaic WM is consumed straight from upstream, one pin per shell branch
-# renovate: datasource=git-refs depName=https://github.com/CleoMenezesJr/MosaicWM branch=main
+# Mosaic WM, straight from upstream. main declares ["51"] only and the gnome-51
+# branch is gone, so main is the 51 pin's source; the 50 pin is frozen at the
+# last main commit that declared 50, with no Renovate line to bump it off it.
 MOSAICWM_50_COMMIT=d6c7804de4a84aca428ca27df565eee68761e6ab
-# renovate: datasource=git-refs depName=https://github.com/CleoMenezesJr/MosaicWM branch=gnome-51
+# renovate: datasource=git-refs depName=https://github.com/CleoMenezesJr/MosaicWM branch=main
 MOSAICWM_51_COMMIT=b7c5a9e01193b9ec193479da9581e6bf98d685e3
 
 # renovate: datasource=git-refs depName=https://gitlab.com/lorbus42/NekoTorch branch=master
@@ -308,12 +309,9 @@ install_vendored_extensions() {
     # udev rule granting the seat access to the torch LEDs
     install -Dm0644 "${src}/nekotorch/99-flash.rules" /usr/lib/udev/rules.d/99-flash.rules
 
-    # Mosaic WM: plain JavaScript, the extension directory as-is. Upstream
-    # develops each shell on its own branch -- main declares ["50"], gnome-51
-    # declares ["51"] -- and the two have diverged too far for one pin to
-    # serve both, so both are pinned above (Renovate follows each branch)
-    # and the build fetches the one for the shell it ships. A shell with no
-    # pin here fails the build: pick a branch, do not guess.
+    # Mosaic WM: plain JavaScript, the extension directory as-is. One pin per
+    # shell above; the build fetches the one for the shell it ships, and a
+    # shell with no pin fails the build rather than guessing.
     case "$(shell_major)" in
         50) fetch_pinned https://github.com/CleoMenezesJr/MosaicWM \
                 "${MOSAICWM_50_COMMIT}" "${src}/mosaicwm" ;;
