@@ -66,8 +66,14 @@ dnf -y remove nvidia-gpu-firmware
 
 # Sessions that mean nothing on a 6.4" panel. GNOME Classic in particular
 # drags its extension set along, so it goes before anything touches the
-# shell below.
+# shell below -- and so does that set's shared package, which pins
+# gnome-shell >= 51. The mobile 51~beta.mobile.0 cannot meet that, and with
+# the pin installed dnf quietly keeps stock gnome-shell and mutter and moves
+# only gnome-settings-daemon; the from_repo assert below is what catches it.
 dnf -y remove gnome-classic-session gnome-tour
+if rpm -q gnome-shell-extension-common > /dev/null; then
+    dnf -y remove gnome-shell-extension-common
+fi
 
 ############################################################################
 # The mobile shell: gnome-shell, mutter and gnome-settings-daemon rebuilt
