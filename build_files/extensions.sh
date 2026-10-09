@@ -58,7 +58,7 @@ BAZAAR_INTEGRATION_COMMIT=619ecbc6408d789dedfcbb412879bcc2d5fa24dc
 BAZAAR_INTEGRATION_UPSTREAM_COMMIT=3bb9134985343ffd1993520eb37c90e113bfb09b
 
 # renovate: datasource=git-refs depName=https://github.com/eonpatapon/gnome-shell-extension-caffeine branch=master
-CAFFEINE_COMMIT=be18b3558a250d672a7108f01a8dcf55c0935bc6
+CAFFEINE_COMMIT=0c35fdf997d2ffaa34f90b2cae7695b9014bc59c
 
 # renovate: datasource=git-refs depName=https://gitlab.gnome.org/lorbus/gnome-shell-extensions branch=main
 GNOME_SHELL_EXTENSIONS_COMMIT=c4f2f666d1c0f69ff850dc9991576137b0476c7a
