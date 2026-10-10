@@ -168,7 +168,7 @@ jobs:
       # main is the state worth tracking
       - name: Upload vulnerability report to code scanning
         if: ${{ needs.plan.outputs.event != 'pull_request' }}
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           sarif_file: grype.sarif
           category: grype-${{ matrix.platform }}-${{ matrix.fedora_branch }}${{ matrix.platform == 'bluespin' && format('-{0}', matrix.arch) || '' }}
