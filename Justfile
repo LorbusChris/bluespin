@@ -114,11 +114,31 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
         exit 1
     fi
 
+    # The Fedora base is a floating tag (bluespin.env), so resolve it once here
+    # and build from that exact digest: the FROM and the base.* labels below
+    # then agree, and the image itself says which base it came from. In CI the
+    # variants build FROM the just-pushed bluespin image, already by digest.
+    base_ref="${BLUESPIN_IMAGE:-${base}}"
+    base_name="${base_ref%%@*}"
+    if [[ "${base_ref}" == *@sha256:* ]]; then
+        base_digest="${base_ref##*@}"
+    elif command -v skopeo > /dev/null; then
+        base_digest="$(skopeo inspect --no-tags --format '{{{{.Digest}}' "docker://${base_ref}")"
+        base="${base}@${base_digest}"
+    else
+        echo "::warning::no skopeo on PATH: building from the unresolved tag, with no base.digest label" >&2
+        base_digest=""
+    fi
+
     BUILD_ARGS=()
     LABELS=()
 
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base}")
     BUILD_ARGS+=("--build-arg" "FEDORA_BRANCH=${fedora_branch}")
+    LABELS+=("--label" "org.opencontainers.image.base.name=${base_name}")
+    if [[ -n "${base_digest}" ]]; then
+        LABELS+=("--label" "org.opencontainers.image.base.digest=${base_digest}")
+    fi
 
     # The platform is a Containerfile stage (the stages set their own
     # IMAGE_NAME; passing it as a build-arg would mislabel the shared
