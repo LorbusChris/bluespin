@@ -68,13 +68,16 @@
       depNameTemplate: 'sigstore/cosign',
     },
     {
+      // Container images named in bluespin.env and the CLI wrapper. The
+      // digest is optional so the Fedora bases, which float by design, stay
+      // detected; the packageRule below keeps Renovate from pinning them.
       customType: 'regex',
       managerFilePatterns: [
         '/^bluespin\\.env$/',
         '/^files/etc/profile\\.d/97-bluespin-container-clis\\.sh$/',
       ],
       matchStrings: [
-        '[A-Z0-9_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)',
+        '[A-Z0-9_]+_IMAGE=(?<depName>[^:@\\s]+):(?<currentValue>[^@\\s]+)(@(?<currentDigest>sha256:[a-f0-9]+))?',
       ],
       datasourceTemplate: 'docker',
     },
@@ -122,12 +125,11 @@
   ],
   packageRules: [
     {
-      // The per-branch base pins: the tag IS the Fedora branch, fixed by
-      // the variable it lives in -- FEDORA_44_BASE_IMAGE stays :44
-      // forever. Only the digest may move. Without this, Renovate
-      // "upgrades" the 44 tag to 45 and mangles the variable into a
-      // duplicate of the 45 pin (PR #71).
-      description: 'Base image tags are branch names, not versions -- digests only',
+      // The per-branch bases: the tag IS the Fedora branch, fixed by the
+      // variable it lives in -- FEDORA_44_BASE_IMAGE stays :44 forever.
+      // Without this, Renovate "upgrades" the 44 tag to 45 and mangles the
+      // variable into a duplicate of the 45 line (PR #71).
+      description: 'Base image tags are branch names, not versions',
       matchPackageNames: [
         'quay.io/fedora-ostree-desktops/silverblue',
       ],
@@ -137,6 +139,19 @@
         'patch',
       ],
       enabled: false,
+    },
+    {
+      // And no digest either: quay expires a build's digest after four
+      // weeks, so a pinned base is a build failure waiting for its bump --
+      // see bluespin.env. config:best-practices would pin it back.
+      description: 'Base images float -- never pin their digest',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'quay.io/fedora-ostree-desktops/silverblue',
+      ],
+      pinDigests: false,
     },
     {
       // A pinned extension is only safe to bump if it still declares the

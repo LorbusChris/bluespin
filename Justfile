@@ -97,7 +97,7 @@ sudoif command *args:
 # Build one platform on one Fedora branch: `just build bluespin-dx rawhide`.
 #
 # The branch is the image tag. Its base comes from bluespin.env
-# (FEDORA_<BRANCH>_BASE_IMAGE, digest-pinned there and nowhere else) and goes to
+# (FEDORA_<BRANCH>_BASE_IMAGE, a floating tag on purpose -- see there) and goes to
 # the one Containerfile as BASE_IMAGE; build.sh branches on IMAGE_NAME for the
 # platform and detects the base it landed on.
 # arch: only for cross-arch platforms; empty means the host arch, which is what
