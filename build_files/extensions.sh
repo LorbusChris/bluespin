@@ -55,7 +55,7 @@ APPINDICATOR_COMMIT=52da5222a17f7a862e8a47d2bc523f29abf59964
 # renovate: datasource=git-refs depName=https://github.com/LorbusChris/bazaar-companion branch=main
 BAZAAR_INTEGRATION_COMMIT=619ecbc6408d789dedfcbb412879bcc2d5fa24dc
 # renovate: datasource=git-refs depName=https://github.com/bazaar-org/bazaar-companion branch=main
-BAZAAR_INTEGRATION_UPSTREAM_COMMIT=3bb9134985343ffd1993520eb37c90e113bfb09b
+BAZAAR_INTEGRATION_UPSTREAM_COMMIT=551ab812fda96e76fecc29a06f2adc993dd4e041
 
 # renovate: datasource=git-refs depName=https://github.com/eonpatapon/gnome-shell-extension-caffeine branch=master
 CAFFEINE_COMMIT=0c35fdf997d2ffaa34f90b2cae7695b9014bc59c
@@ -68,7 +68,7 @@ GNOME_SHELL_EXTENSIONS_UPSTREAM_REF=51.0
 # renovate: datasource=git-refs depName=https://github.com/LorbusChris/gradia-capture branch=master
 GRADIA_INTEGRATION_COMMIT=f3da59525e797ee7d2d3e0145eb9979c176e0119
 # renovate: datasource=git-refs depName=https://github.com/AlexanderVanhee/gradia-capture branch=master
-GRADIA_INTEGRATION_UPSTREAM_COMMIT=f70a2127d0a9acc3c9d4d8198361fc9f4e14818f
+GRADIA_INTEGRATION_UPSTREAM_COMMIT=0b7e47e1e5c1e68e234e4d2d24b307e1da1d18a9
 
 # Mosaic WM, straight from upstream. main declares ["51"] only and the gnome-51
 # branch is gone, so main is the 51 pin's source; the 50 pin is frozen at the
