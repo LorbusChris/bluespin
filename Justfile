@@ -116,17 +116,24 @@ build $target_image=image_name $fedora_branch=default_fedora_branch $arch="":
 
     # The Fedora base is a floating tag (bluespin.env), so resolve it once here
     # and build from that exact digest: the FROM and the base.* labels below
-    # then agree, and the image itself says which base it came from. In CI the
-    # variants build FROM the just-pushed bluespin image, already by digest.
+    # then agree, and the image itself says which base it came from. Variants
+    # build FROM a bluespin image instead (BLUESPIN_IMAGE): on pushes the one
+    # just published, already by digest; on PRs and locally the base leg's
+    # image loaded into local storage, which no registry knows about.
     base_ref="${BLUESPIN_IMAGE:-${base}}"
     base_name="${base_ref%%@*}"
+    base_digest=""
     if [[ "${base_ref}" == *@sha256:* ]]; then
         base_digest="${base_ref##*@}"
-    elif command -v skopeo > /dev/null; then
-        base_digest="$(skopeo inspect --no-tags --format '{{{{.Digest}}' "docker://${base_ref}")"
-        base="${base}@${base_digest}"
-    else
+    elif [[ -n "${BLUESPIN_IMAGE:-}" ]] && podman image exists "${base_ref}"; then
+        base_digest="$(podman image inspect --format '{{{{.Digest}}' "${base_ref}")"
+    elif ! command -v skopeo > /dev/null; then
         echo "::warning::no skopeo on PATH: building from the unresolved tag, with no base.digest label" >&2
+    elif base_digest="$(skopeo inspect --no-tags --format '{{{{.Digest}}' "docker://${base_ref}")"; then
+        # Only the Fedora base is ours to pin; a bluespin ref stays as given.
+        [[ -n "${BLUESPIN_IMAGE:-}" ]] || base="${base}@${base_digest}"
+    else
+        echo "::warning::could not resolve ${base_ref}: building from the tag, with no base.digest label" >&2
         base_digest=""
     fi
 
