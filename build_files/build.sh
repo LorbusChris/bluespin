@@ -398,6 +398,19 @@ install -Dm0644 /ctx/files/etc/yum.repos.d/tailscale.repo \
 dnf -y install --enablerepo=tailscale-stable tailscale
 systemctl enable tailscaled.service
 
+# Swap headroom, on every platform -- the incident and the reasoning are in
+# docs/memory-pressure.md. zram past Fedora's flat 8 GB cap (the phone's
+# device layer lays its own file over this one), two sysctls for a
+# zram-first machine, and the swap unit `ujust setup-swapfile` fills:
+# shipped enabled, inert until the file exists.
+install -Dm0644 /ctx/files/etc/systemd/zram-generator.conf \
+    /etc/systemd/zram-generator.conf
+install -Dm0644 /ctx/files/usr/lib/sysctl.d/60-bluespin-swap.conf \
+    /usr/lib/sysctl.d/60-bluespin-swap.conf
+install -Dm0644 /ctx/files/usr/lib/systemd/system/var-swap-swapfile.swap \
+    /usr/lib/systemd/system/var-swap-swapfile.swap
+systemctl enable var-swap-swapfile.swap
+
 ############################################################################
 # 4. Signing. Every image we publish is cosign-signed, so every image must
 #    also know how to verify its own updates.

@@ -1,0 +1,15 @@
+[Unit]
+# The disk swap file behind zram, created on request by `ujust setup-swapfile`
+# (docs/memory-pressure.md). Shipped enabled on every platform and inert
+# wherever the file does not exist: a failed condition skips the unit without
+# a failure, so the image carries no per-machine state for it.
+Description=Swap file behind zram (ujust setup-swapfile)
+ConditionPathExists=/var/swap/swapfile
+
+[Swap]
+What=/var/swap/swapfile
+# zram0 is 100: zram fills first, the disk takes only what it cannot hold
+Priority=10
+
+[Install]
+WantedBy=swap.target
