@@ -60,3 +60,44 @@ remove-flatpaks SET="prompt":
         flatpak uninstall --user -y --noninteractive "${app}" 2>/dev/null \
             || echo "  ${app} was not installed, skipping"
     done < <(grep -vE '^[[:space:]]*(#|$)' "${file}")
+
+# Add a disk swap file behind zram (default 32G; btrfs /var; needs sudo)
+setup-swapfile SIZE="32G":
+    #!/usr/bin/bash
+    set -euo pipefail
+    # zram is sized for the common case; a machine that runs big IDE sessions,
+    # agents and builds at once wants real headroom behind it -- see
+    # docs/memory-pressure.md. The file gets its own btrfs subvolume: a swap
+    # file pins its extents, so the subvolume holding it can never be
+    # snapshotted, and that restriction should not land on /var itself. The
+    # swap unit is already in the image (var-swap-swapfile.swap, priority 10
+    # behind zram's 100); it only waits for the file to exist. No SELinux
+    # relabelling: systemd activates swap through swapon, which runs as
+    # fsadm_t, and the policy leaves that domain unconfined for files.
+    size={{ SIZE }}
+    file=/var/swap/swapfile
+    if [ -e "${file}" ]; then
+        echo "${file} exists already:"
+        swapon --show
+        echo "run 'ujust remove-swapfile' first to change its size"
+        exit 1
+    fi
+    fstype=$(stat -f -c %T /var)
+    if [ "${fstype}" != "btrfs" ]; then
+        echo "/var is ${fstype}; this recipe only knows how to do btrfs"
+        exit 1
+    fi
+    echo "Creating a ${size} swap file at ${file}, in its own btrfs subvolume."
+    sudo btrfs subvolume create /var/swap
+    sudo btrfs filesystem mkswapfile --size "${size}" "${file}"
+    sudo systemctl start var-swap-swapfile.swap
+    swapon --show
+
+# Remove the swap file setup-swapfile created
+remove-swapfile:
+    #!/usr/bin/bash
+    set -euo pipefail
+    sudo systemctl stop var-swap-swapfile.swap
+    sudo rm -f /var/swap/swapfile
+    sudo btrfs subvolume delete /var/swap
+    swapon --show

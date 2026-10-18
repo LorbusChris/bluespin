@@ -102,11 +102,32 @@ WEATHER_OR_NOT_COMMIT=690946752621304ad1e0edd6a1eba26d8d2c9913
 # reproducible as a submodule checkout without carrying one.
 fetch_pinned() {
     local repo=$1 commit=$2 dest=$3 url
+    install -d "${dest}"
     case "${repo}" in
+        https://gitlab.gnome.org/*)
+            # GNOME's GitLab no longer serves archive downloads: since
+            # 2026-10-18 its CDN edge answers 406 to every /-/archive/ and
+            # API archive URL, whatever the client sends -- a measure
+            # against bot scrapers, not keyed on the user agent. Plain git
+            # still works, so fetch exactly the pinned commit over smart
+            # HTTP (GitLab accepts a SHA as the want) and unpack it with
+            # git archive; git-core ships in the Silverblue base.
+            local scratch try
+            scratch="$(mktemp -d)"
+            git -C "${scratch}" init -q
+            for try in 1 2 3; do
+                git -C "${scratch}" fetch -q --depth 1 "${repo}.git" "${commit}" && break
+                [ "${try}" -lt 3 ] || { echo "git fetch of ${repo}@${commit} failed" >&2; return 1; }
+                sleep 5
+            done
+            git -C "${scratch}" archive FETCH_HEAD | tar -x -C "${dest}"
+            rm -rf "${scratch:?}"
+            return 0
+            ;;
         https://github.com/*)
             url="${repo}/archive/${commit}.tar.gz"
             ;;
-        https://gitlab.com/* | https://gitlab.gnome.org/*)
+        https://gitlab.com/*)
             url="${repo}/-/archive/${commit}/source.tar.gz"
             ;;
         *)
@@ -115,13 +136,11 @@ fetch_pinned() {
             ;;
     esac
     # Download to a file, then extract: piping curl into tar turns a flaky
-    # forge (gitlab.gnome.org archive generation, mostly) into an opaque
-    # "tar: Child returned status 1", and curl's retries cannot rescue a
-    # stream tar already died on.
+    # forge into an opaque "tar: Child returned status 1", and curl's
+    # retries cannot rescue a stream tar already died on.
     local tarball
     tarball="$(mktemp)"
     curl -fsSL --retry 5 --retry-all-errors -o "${tarball}" "${url}"
-    install -d "${dest}"
     tar -xzf "${tarball}" --strip-components=1 -C "${dest}"
     rm -f "${tarball}"
 }

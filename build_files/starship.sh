@@ -17,8 +17,8 @@ set -xeuo pipefail
 
 # renovate: datasource=github-releases depName=starship/starship
 STARSHIP_VERSION=v1.27.0
-STARSHIP_SHA256_x86_64=321f0dd7af8340a5f2e6a8fec6538a04f617486f9ec70d878f91c09cd8deef22
-STARSHIP_SHA256_aarch64=dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b
+STARSHIP_SHA256_x86_64=3b94758850901717eb36aa1b53f8492c1322506ec6d41273bc6151e79ed8e4a1
+STARSHIP_SHA256_aarch64=341f5cbf24699fa0b27ec88965ad25f862ea09e15d35a543fd6ffdff1d2aa00d
 
 install_starship() {
     local arch target want got tmp
