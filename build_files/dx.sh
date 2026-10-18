@@ -222,6 +222,24 @@ gpgkey=https://packages.microsoft.com/keys/microsoft.asc
 EOF
 dnf -y install --enablerepo=code code
 
+# VS Code in a memory box: what runs away inside it -- a C/C++ indexer, an
+# agent session, a build in the integrated terminal -- is reclaimed and, at
+# the wall, killed inside VS Code rather than freezing the desktop. The
+# incident and the numbers are in docs/memory-pressure.md. Two user-manager
+# drop-ins, applied by dash-truncated name to the transient scopes VS Code
+# runs in: Electron's own app-com.microsoft.VSCode-<pid>.scope (main
+# process, extension hosts and everything they spawn) and gnome-shell's
+# app-gnome-com.microsoft.VSCode-<pid>.scope (renderers, GPU process).
+# Both names follow the desktop file's id, so prove the id the directories
+# are named after is the one this VS Code ships -- upstream renamed it once
+# already, from code.desktop, and a rename would otherwise leave the box
+# silently empty.
+[[ -f /usr/share/applications/com.microsoft.VSCode.desktop ]]
+install -Dm0644 /ctx/files/usr/lib/systemd/user/app-com.microsoft.VSCode-.scope.d/90-bluespin-memory-cap.conf \
+    /usr/lib/systemd/user/app-com.microsoft.VSCode-.scope.d/90-bluespin-memory-cap.conf
+install -Dm0644 /ctx/files/usr/lib/systemd/user/app-gnome-com.microsoft.VSCode-.scope.d/90-bluespin-memory-cap.conf \
+    /usr/lib/systemd/user/app-gnome-com.microsoft.VSCode-.scope.d/90-bluespin-memory-cap.conf
+
 # VFIO in the initramfs, for GPU passthrough to guests
 install -Dm0644 /ctx/files/usr/lib/dracut/dracut.conf.d/80-vfio.conf \
     /usr/lib/dracut/dracut.conf.d/80-vfio.conf
