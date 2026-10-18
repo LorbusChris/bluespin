@@ -82,6 +82,13 @@ leg built any other way would publish unsigned.
   `ujust toggle-user-motd` hides it.
 - **Tailscale**, with `tailscaled` enabled but idle until `tailscale up`;
   `ujust tailscale-operator` lets your user drive it without sudo.
+- **Memory headroom**: zram sized for the machine (half of RAM above 16 GB,
+  capped at 16 GB, zstd) with zram-first sysctls, a 32 GB disk swap file on
+  request (`ujust setup-swapfile`), and on dx a memory box around VS Code so
+  a runaway indexer or agent session is killed inside it rather than
+  freezing the desktop. The incident, the numbers, and what Fedora, Bluefin
+  and Bazzite do instead are in
+  [docs/memory-pressure.md](docs/memory-pressure.md).
 - **A signed `v4l2loopback`** virtual camera on every platform and branch,
   built from the vendored submodule in a throwaway Containerfile stage.
 - **Containerized CLIs** as shell functions over digest-pinned images,
@@ -377,6 +384,11 @@ Two units come with it, since neither exists on the non-dx base:
 (a bootc image has no `/var`, so they come up without the SELinux contexts
 the RPM would have applied), and `bluespin-dx-groups.service` adds wheel
 members to `libvirt` and `incus-admin`.
+
+VS Code also comes boxed: two user-manager drop-ins cap the cgroups it runs
+in at 75% and 25% of RAM, with `OOMPolicy=continue` so that a kill inside
+the box takes one process rather than the editor. Why, and what the numbers
+were, is in [docs/memory-pressure.md](docs/memory-pressure.md).
 
 ## Building locally
 
