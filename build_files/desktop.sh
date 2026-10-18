@@ -81,8 +81,11 @@ write_desktop_defaults() {
             org.gnome.Calculator.desktop     # flatpak
             org.gnome.TextEditor.desktop     # flatpak
         )
-        # VS Code is installed by the developer layer only
-        [[ "${platform}" == "bluespin-dx" ]] && favourites+=(code.desktop)
+        # VS Code is installed by the developer layer only. Its desktop file is
+        # com.microsoft.VSCode.desktop since the autumn 2026 releases (it was
+        # code.desktop); dx.sh asserts the id, since GNOME drops a favourite
+        # whose file is missing without a word.
+        [[ "${platform}" == "bluespin-dx" ]] && favourites+=(com.microsoft.VSCode.desktop)
         printf "favorite-apps = ["
         printf "'%s', " "${favourites[@]}" | sed 's/, $//'
         printf "]\n"
@@ -228,7 +231,7 @@ categories=['Game']
 name='Development.directory'
 translate=true
 categories=['Development', 'IDE']
-apps=['code.desktop', 'virt-manager.desktop']
+apps=['com.microsoft.VSCode.desktop', 'virt-manager.desktop']
 
 # Catppuccin, from the four variants Ptyxis already bundles. Bluefin instead
 # ships a "catppuccin-dynamic" file pairing Latte (light) with Mocha (dark),
