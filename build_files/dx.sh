@@ -198,7 +198,7 @@ dnf -y copr disable lorbus/calls
 # reminder to update the hash from the release's cosign_checksums.txt.
 # renovate: datasource=github-releases depName=sigstore/cosign
 COSIGN_VERSION=v3.1.4
-COSIGN_RPM_SHA256=2e126115465ba55d03d3aea606cced2a24a1df578c8feb1d9384d584ebda9226
+COSIGN_RPM_SHA256=02fd4fe524932ccba09f7762fce76be35e5570d2023a1093cce776eefc6b62df
 cosign_rpm="$(mktemp -d)/cosign.rpm"
 curl -fsSL --retry 3 -o "${cosign_rpm}" \
     "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-${COSIGN_VERSION#v}-1.x86_64.rpm"
