@@ -125,6 +125,7 @@ jobs:
       surface_installer: ${{ steps.plan.outputs.surface_installer }}
       fp5_disk: ${{ steps.plan.outputs.fp5_disk }}
       base_runs: ${{ steps.plan.outputs.base_runs }}
+      bluespin_legs: ${{ steps.plan.outputs.bluespin_legs }}
     steps:
       - name: Plan the legs
         id: plan
@@ -316,6 +317,11 @@ jobs:
             add fp5 '{"fedora_branch":"45","arch":"arm64"}'
           fi
 
+          # The base legs this run builds, as <branch>-<arch> keys: a
+          # pushed variant whose base is among them layers on what that
+          # leg published in this run, never on an older published image
+          bluespin_legs="$(jq -c '[.[] | "\(.fedora_branch)-\(.arch)"]' <<< "${bluespin}")"
+
           {
             echo "bluespin=${bluespin}"
             echo "dx=${dx}"
@@ -325,6 +331,7 @@ jobs:
             echo "surface_installer=${surface_installer}"
             echo "fp5_disk=${fp5_disk}"
             echo "base_runs=${base_runs}"
+            echo "bluespin_legs=${bluespin_legs}"
           } | tee -a "$GITHUB_OUTPUT"
 
           # The plan travels with the run: the follow-on workflows read
@@ -539,11 +546,14 @@ jobs:
   # FROM the published -amd64 instance digest, on pull requests FROM the
   # very image the base leg just built, handed over as a workflow
   # artifact -- fp5 layers on the arm bluespin exactly the same way. The
-  # bluespin caller job reports failure if ANY job in the called
-  # workflow fails -- the attest job included, whose failures are
-  # typically an external service flaking after the image already
-  # published. On pushes the variants' own Resolve step is the real gate
-  # -- no published bluespin digest, no leg -- so attempt them unless the
+  # bluespin caller job reports failure if ANY of its legs fails, so its
+  # result cannot gate a variant leg on its own base leg. On pushes the
+  # variants' own Resolve step is the gate: a base leg this run planned
+  # must have recorded the digest it published, or the variant leg fails
+  # rather than layer on the older image the instance tag still serves
+  # (the 45 variants shipped on a 2026-11-04/05 base for eleven days
+  # that way, every check green); a dispatch that rebuilds a variant
+  # alone layers on whatever is published. So attempt them unless the
   # run was cancelled; skipped counts as covered-elsewhere on pull
   # requests (a labeled delta run).
   bluespin-dx:
@@ -571,6 +581,7 @@ jobs:
       # finishes; the -amd64 instance tag is fresh the moment the
       # bluespin leg pushed it
       bluespin_tag_suffix: "-amd64"
+      bluespin_in_run: ${{ contains(fromJSON(needs.plan.outputs.bluespin_legs), format('{0}-amd64', matrix.fedora_branch)) }}
       # PR-side: build FROM the very image the base leg just built
       from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-amd64', matrix.fedora_branch) || '' }}
       from_image_run_id: ${{ fromJSON(needs.plan.outputs.base_runs)[format('{0}-amd64', matrix.fedora_branch)] || '' }}
@@ -595,6 +606,7 @@ jobs:
       image_desc: "Bluespin for Microsoft Surface devices"
       from_bluespin: true
       bluespin_tag_suffix: "-amd64"
+      bluespin_in_run: ${{ contains(fromJSON(needs.plan.outputs.bluespin_legs), format('{0}-amd64', matrix.fedora_branch)) }}
       from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-amd64', matrix.fedora_branch) || '' }}
       from_image_run_id: ${{ fromJSON(needs.plan.outputs.base_runs)[format('{0}-amd64', matrix.fedora_branch)] || '' }}
     secrets: inherit
@@ -629,6 +641,7 @@ jobs:
       arch: arm64
       from_bluespin: true
       bluespin_tag_suffix: "-arm64"
+      bluespin_in_run: ${{ contains(fromJSON(needs.plan.outputs.bluespin_legs), format('{0}-arm64', matrix.fedora_branch)) }}
       # The PR-side inheritance: load the base leg's image from its
       # artifact and build FROM it
       from_image_artifact: ${{ github.event_name == 'pull_request' && format('image-bluespin-{0}-arm64', matrix.fedora_branch) || '' }}

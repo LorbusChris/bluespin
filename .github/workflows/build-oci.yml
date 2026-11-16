@@ -39,6 +39,10 @@ on:
         description: 'Arch suffix of the bluespin tag a from_bluespin leg chains FROM'
         type: string
         default: ''
+      bluespin_in_run:
+        description: 'The bluespin leg a from_bluespin leg chains FROM ran in this run: on pushes, layer on the digest it recorded, and fail if it recorded none'
+        type: boolean
+        default: false
       from_image_artifact:
         description: 'On pull requests, the artifact holding the bluespin base image to build FROM'
         type: string
@@ -116,15 +120,40 @@ jobs:
           fi
 
       # On pushes, a variant builds FROM the bluespin image the bluespin job
-      # just published, skipping the bluespin rebuild entirely. PRs publish
-      # nothing, so their variant legs chain from the bluespin stage inside
-      # the Containerfile instead (self-contained, same coverage). just
-      # build picks BLUESPIN_IMAGE up from the environment.
+      # just published, skipping the bluespin rebuild entirely; just build
+      # picks BLUESPIN_IMAGE up from the environment. When the base leg ran
+      # in this run, that is exactly the digest it recorded. A base leg that
+      # failed leaves its instance tag on the last image that built, and a
+      # variant layered on that would ship an old bluespin under today's
+      # tags with every check green -- so no record fails the leg. A
+      # dispatch that rebuilds a variant alone layers on whatever the
+      # instance tag serves.
+      - name: Fetch the digest the base leg recorded
+        if: inputs.from_bluespin && inputs.bluespin_in_run && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        # No record is an answer, not an error: the next step says what it means
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: published-bluespin-${{ inputs.fedora_branch }}${{ inputs.bluespin_tag_suffix }}
+          path: /tmp/base-digest
+
       - name: Resolve the bluespin image
         if: inputs.from_bluespin && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          BLUESPIN_IN_RUN: ${{ inputs.bluespin_in_run }}
         run: |
-          ref="${IMAGE_REGISTRY}/bluespin:${FEDORA_BRANCH}${{ inputs.bluespin_tag_suffix }}"
-          digest="$(skopeo inspect --no-tags --format '{{.Digest}}' "docker://${ref}")"
+          set -euo pipefail
+          leg="${FEDORA_BRANCH}${{ inputs.bluespin_tag_suffix }}"
+          ref="${IMAGE_REGISTRY}/bluespin:${leg}"
+          if [[ "${BLUESPIN_IN_RUN}" == "true" ]]; then
+            if [[ ! -s "/tmp/base-digest/${leg}" ]]; then
+              echo "::error::bluespin ${leg} did not publish in this run; not layering ${IMAGE_NAME} on the older image bluespin:${leg} still serves"
+              exit 1
+            fi
+            digest="$(< "/tmp/base-digest/${leg}")"
+          else
+            digest="$(skopeo inspect --no-tags --format '{{.Digest}}' "docker://${ref}")"
+          fi
           echo "BLUESPIN_IMAGE=${ref}@${digest}" >> "${GITHUB_ENV}"
 
       # PR-side inheritance, the twin of the Resolve step above: download
@@ -281,7 +310,8 @@ jobs:
 
       # A bluespin leg that published records what it published, as a
       # one-day artifact of this run: the manifest job restitches only
-      # the branches whose legs all left one.
+      # the branches whose legs all left one, and the variant legs layer
+      # on exactly this digest (see Resolve the bluespin image).
       - name: Record the published digest
         if: inputs.platform == 'bluespin' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
