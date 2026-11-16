@@ -457,6 +457,7 @@ Everything in a shipped image that is not from Fedora's own repos:
 | [ublue-os/packages](https://copr.fedorainfracloud.org/coprs/ublue-os/packages/) COPR | `uupd`, `ublue-os-udev-rules`, `oversteer-udev` |
 | [lorbus/network-displays](https://copr.fedorainfracloud.org/coprs/lorbus/network-displays/) COPR | `gnome-network-displays` + extension |
 | [lorbus/calls](https://copr.fedorainfracloud.org/coprs/lorbus/calls/) COPR (dx) | `calls` |
+| [lorbus/NetworkManager](https://copr.fedorainfracloud.org/coprs/lorbus/NetworkManager/) COPR (dx) | `NetworkManager`, replacing Fedora's |
 | [@mobility/surface](https://copr.fedorainfracloud.org/coprs/g/mobility/surface/) COPR (surface) | the surface `kernel`, `iptsd` |
 | packages.microsoft.com (dx, repo shipped disabled) | `code` |
 | pkgs.tailscale.com (repo shipped disabled) | `tailscale` |

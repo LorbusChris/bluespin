@@ -190,6 +190,15 @@ dnf -y copr enable lorbus/calls
 dnf -y install calls
 dnf -y copr disable lorbus/calls
 
+# NetworkManager from our own COPR, replacing the base's: only its own
+# packages come from the COPR. Fail if Fedora's is still installed, which
+# the upgrade leaves in place once Fedora's version sorts higher.
+nm_copr=copr:copr.fedorainfracloud.org:lorbus:NetworkManager
+dnf -y copr enable lorbus/NetworkManager
+dnf -y upgrade --from-repo="${nm_copr}" 'NetworkManager*'
+dnf -y copr disable lorbus/NetworkManager
+[[ "$(dnf -q repoquery --installed --qf '%{from_repo}' NetworkManager)" == "${nm_copr}" ]]
+
 # cosign, to verify the very images and attestations this machine runs and
 # lets its owner build. Fedora does not package it; sigstore publishes RPMs
 # with every release, pinned here the way starship.sh pins its binary:
