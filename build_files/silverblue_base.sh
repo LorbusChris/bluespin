@@ -78,9 +78,26 @@ install_multimedia_stack() {
     relver="$(dnf --dump-variables 2>/dev/null | sed -n 's/^releasever = //p')"
     [[ -n "${relver}" ]]
 
-    dnf -y install \
-        "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${relver}.noarch.rpm" \
-        "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${relver}.noarch.rpm"
+    # A branched release's release rpms sit at a stable URL. Rawhide's no
+    # longer do: the -rawhide.noarch.rpm links answer 403 (seen 2026-11-16),
+    # and the packages live only in RPMFusion's rawhide tree, under a name
+    # that changes with every bump (rpmfusion-free-release-46-0.4) -- so
+    # look the current one up there. Either way the rpm is fetched over
+    # https and installed from its URL, as before.
+    local release_rpms=() part url
+    for part in free nonfree; do
+        if [[ "${relver}" == "rawhide" ]]; then
+            url="$(dnf -q repoquery --latest-limit=1 --location \
+                --repofrompath="rpmfusion-${part}-rawhide-tree,https://download1.rpmfusion.org/${part}/fedora/development/rawhide/Everything/$(uname -m)/os/" \
+                --repo="rpmfusion-${part}-rawhide-tree" \
+                "rpmfusion-${part}-release")"
+            [[ "${url}" == https://*.rpm ]]
+        else
+            url="https://mirrors.rpmfusion.org/${part}/fedora/rpmfusion-${part}-release-${relver}.noarch.rpm"
+        fi
+        release_rpms+=("${url}")
+    done
+    dnf -y install "${release_rpms[@]}"
 
     # The repo files, wherever the release rpms put them: /etc/yum.repos.d
     # up to 44, dnf5's vendor directory /usr/share/dnf5/repos.d from 45 on
