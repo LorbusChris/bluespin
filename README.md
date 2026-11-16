@@ -17,14 +17,16 @@ ones live in [docs/desktop-defaults.md](docs/desktop-defaults.md).
 | `ghcr.io/lorbuschris/bluespin-fp5` | The phone (aarch64): the [pocketblue](https://github.com/pocketblue/pocketblue) device layer for the Fairphone 5, the [@mobility/gnome-mobile](https://copr.fedorainfracloud.org/coprs/g/mobility/gnome-mobile/) shell and the [@mobility/sc7280](https://copr.fedorainfracloud.org/coprs/g/mobility/sc7280/) kernel, plus telephony ([fp5.sh](build_files/fp5.sh)) -- the device layer on the generic aarch64 bluespin image |
 
 Each platform is built per Fedora branch, and the branch is the tag:
-`bluespin:44`, `bluespin-dx:rawhide`. Three channel aliases follow
-Fedora's lifecycle: `latest` points at the stable branch (44), `next`
-at the branched pre-release (45), and `rolling` at rawhide. Every
-branch builds on Fedora's own Silverblue. Pushes and
-the nightly build exactly what ships -- x86 and the variants on 44 and
-45, arm and fp5 on 45 -- while rawhide legs are opt-in (a ci label or a
-dispatch): they exist to find out what breaks on the next GNOME before
-it ships, when someone asks.
+`bluespin:45`, `bluespin-dx:rawhide`. Three channel aliases follow
+Fedora's lifecycle: `latest` points at the stable branch (45), `next`
+at the branched pre-release -- also 45 until 46 branches from rawhide,
+since between a release and the next branching there is none -- and
+`rolling` at rawhide. Every branch builds on Fedora's own Silverblue.
+Pushes and the nightly build exactly what ships -- x86 and the variants
+on 44 and 45, arm and fp5 on 45; 44, the previous stable, keeps
+building under its own tag while Fedora supports it -- while rawhide
+legs are opt-in (a ci label or a dispatch): they exist to find out what
+breaks on the next GNOME before it ships, when someone asks.
 
 Pull requests build nothing by default: CI legs are opted in per PR with
 labels following the grammar
@@ -34,8 +36,8 @@ ci[-variant][-arm][-rawhide][-installer|-disk]
 ```
 
 pick a platform (`ci`, `ci-dx`, `ci-surface`, `ci-arm`, `ci-fp5` -- the
-phone is arm by nature), pick a branch (stable by default -- 44 on x86,
-45 on arm -- or the `-rawhide` form), and optionally ask for the leg's
+phone is arm by nature), pick a branch (stable by default -- 45 on both
+architectures -- or the `-rawhide` form), and optionally ask for the leg's
 install medium (`-installer` for a live ISO, `-disk` for the phone's
 flashable image). Everything but dx has an install medium: the
 developer layer is something you rebase to from a running bluespin, not
@@ -51,7 +53,7 @@ platforms you want -- `dx` alone rebuilds just the developer layer
 against the already-published bluespin image it layers on:
 
 ```bash
-gh workflow run Build -f fedora_branches='["44"]' -f platforms=dx
+gh workflow run Build -f fedora_branches='["45"]' -f platforms=dx
 ```
 
 Dispatch `Build`, not `Build OCI` directly: signing, scanning and the
@@ -161,9 +163,8 @@ stay pre-releases forever, that is their grade, not a pending
 promotion.
 
 Which media a release gets is the registry's call: one bluespin ISO
-per architecture the branch index serves (so a `latest` release gets
-no arm ISO while stable is 44, a condition that retires when stable
-switches to 45), dx and surface ISOs where their tags exist, and the
+per architecture the branch index serves (x86 and arm for 45; 44 has no
+arm image), dx and surface ISOs where their tags exist, and the
 FP5 disk image only on the branch `bluespin-fp5` publishes. A
 `rolling` release works the moment on-demand builds have published
 rawhide's images, and fails visibly before.
@@ -174,11 +175,11 @@ once the assets have landed -- promotion fires no `published` event,
 so nothing rebuilds:
 
 ```bash
-gh release create 44.20260825.1 --prerelease --generate-notes --title "bluespin 44.20260825.1"
+gh release create 45.20261116.1 --prerelease --generate-notes --title "bluespin 45.20261116.1"
 # wait for the "Build Installer" and "Build Disk"
 # runs to attach their assets; re-run a failed leg (re-runs overwrite
 # their assets), then:
-gh release edit 44.20260825.1 --prerelease=false --latest
+gh release edit 45.20261116.1 --prerelease=false --latest
 ```
 
 Promote (and mark `--latest`) only the stable branch's releases; a

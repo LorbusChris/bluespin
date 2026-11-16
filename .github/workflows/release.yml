@@ -12,10 +12,9 @@
 # pre-release; rolling is rawhide and publishes as an (alpha)
 # pre-release -- the last two stay pre-releases forever, that is their
 # grade, not a pending promotion. Which media a channel gets is the
-# registry's call (a 44 release gets no arm ISO while stable has no arm
-# image; that condition retires when stable switches to 45), and a
-# rolling release fails visibly until on-demand builds have published
-# rawhide's images.
+# registry's call (a 44 release gets no arm ISO: 44 has no arm image),
+# and a rolling release fails visibly until on-demand builds have
+# published rawhide's images.
 #
 # The ordering cannot use the release event, and does not want to: a
 # release created with the workflow's own GITHUB_TOKEN fires no

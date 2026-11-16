@@ -20,13 +20,12 @@
 #   ci[-variant][-arm][-rawhide][-installer|-disk]
 #
 # pick a platform, pick a branch, optionally ask for its install medium
-# -- and every flag implies exactly the legs it needs. Fedora stable
-# differs by architecture -- 44 on x86, 45 on arm -- and the full
-# expansion follows:
+# -- and every flag implies exactly the legs it needs. Fedora stable is
+# 45 on both architectures, and the full expansion follows:
 #
-#   ci                  bluespin, stable x86        (44, amd64)
-#   ci-dx               + bluespin-dx               (44, amd64), implies ci
-#   ci-surface          + bluespin-surface          (44, amd64), implies ci
+#   ci                  bluespin, stable x86        (45, amd64)
+#   ci-dx               + bluespin-dx               (45, amd64), implies ci
+#   ci-surface          + bluespin-surface          (45, amd64), implies ci
 #   ci-arm              bluespin, stable arm        (45, arm64)
 #   ci-fp5              + bluespin-fp5              (45, arm64), implies ci-arm
 #   *-rawhide           the same legs on rawhide (ci-rawhide,
@@ -184,19 +183,19 @@ jobs:
             [[ -n "${want[ci-fp5-rawhide]:-}" ]] && want[ci-arm-rawhide]=1
             true
 
-            [[ -n "${want[ci]:-}" ]] && add bluespin '{"fedora_branch":"44","arch":"amd64"}'
+            [[ -n "${want[ci]:-}" ]] && add bluespin '{"fedora_branch":"45","arch":"amd64"}'
             [[ -n "${want[ci-rawhide]:-}" ]] && add bluespin '{"fedora_branch":"rawhide","arch":"amd64"}'
             [[ -n "${want[ci-arm]:-}" ]] && add bluespin '{"fedora_branch":"45","arch":"arm64"}'
             [[ -n "${want[ci-arm-rawhide]:-}" ]] && add bluespin '{"fedora_branch":"rawhide","arch":"arm64"}'
-            [[ -n "${want[ci-dx]:-}" ]] && add dx '{"fedora_branch":"44","arch":"amd64"}'
+            [[ -n "${want[ci-dx]:-}" ]] && add dx '{"fedora_branch":"45","arch":"amd64"}'
             [[ -n "${want[ci-dx-rawhide]:-}" ]] && add dx '{"fedora_branch":"rawhide","arch":"amd64"}'
-            [[ -n "${want[ci-surface]:-}" ]] && add surface '{"fedora_branch":"44","arch":"amd64"}'
+            [[ -n "${want[ci-surface]:-}" ]] && add surface '{"fedora_branch":"45","arch":"amd64"}'
             [[ -n "${want[ci-surface-rawhide]:-}" ]] && add surface '{"fedora_branch":"rawhide","arch":"amd64"}'
             [[ -n "${want[ci-fp5]:-}" ]] && add fp5 '{"fedora_branch":"45","arch":"arm64"}'
             [[ -n "${want[ci-fp5-rawhide]:-}" ]] && add fp5 '{"fedora_branch":"rawhide","arch":"arm64"}'
-            [[ -n "${want[ci-installer]:-}" ]] && add bluespin_installer '"44-amd64"'
+            [[ -n "${want[ci-installer]:-}" ]] && add bluespin_installer '"45-amd64"'
             [[ -n "${want[ci-arm-installer]:-}" ]] && add bluespin_installer '"45-arm64"'
-            [[ -n "${want[ci-surface-installer]:-}" ]] && add surface_installer '"44-amd64"'
+            [[ -n "${want[ci-surface-installer]:-}" ]] && add surface_installer '"45-amd64"'
             [[ -n "${want[ci-fp5-disk]:-}" ]] && add fp5_disk '"45-arm64"'
             [[ -n "${want[ci-rawhide-installer]:-}" ]] && add bluespin_installer '"rawhide-amd64"'
             [[ -n "${want[ci-arm-rawhide-installer]:-}" ]] && add bluespin_installer '"rawhide-arm64"'
