@@ -193,8 +193,9 @@ ADDITIONAL_FEDORA_PACKAGES=(
     # Network filesystems and domain membership, on every platform: SMB serve
     # and AD-join (samba/adcli/krb5), NFS automount with AD homedirs
     # (autofs/oddjob), NFS in Files (gvfs-nfs), WebDAV as a filesystem
-    # (davfs2), and encrypted FUSE filesystems (cryfs/encfs, with the FUSE2
-    # runtime older tools expect)
+    # (davfs2), and an encrypted FUSE filesystem (cryfs, with the FUSE2
+    # runtime -- fusermount -- that it and older tools expect). No encfs:
+    # Fedora retired fuse-encfs from 46 on, orphaned, and nothing replaces it
     samba
     samba-winbind
     adcli
@@ -206,7 +207,6 @@ ADDITIONAL_FEDORA_PACKAGES=(
     gvfs-nfs
     davfs2
     cryfs
-    fuse-encfs
     fuse
 
     # Containerized userlands: toolbox is stock, distrobox is not -- until
