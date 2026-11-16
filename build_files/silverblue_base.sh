@@ -78,9 +78,35 @@ install_multimedia_stack() {
     relver="$(dnf --dump-variables 2>/dev/null | sed -n 's/^releasever = //p')"
     [[ -n "${relver}" ]]
 
-    dnf -y install \
-        "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${relver}.noarch.rpm" \
-        "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${relver}.noarch.rpm"
+    # A branched release's release rpms sit at a stable URL. Rawhide's no
+    # longer do: the -rawhide.noarch.rpm links answer 403 (seen 2026-11-16),
+    # and the packages live only in RPMFusion's rawhide tree, under a name
+    # that changes with every bump (rpmfusion-free-release-46-0.4) -- so
+    # look the current one up there. Either way the rpm is fetched over
+    # https and installed from its URL, as before.
+    local release_rpms=() part url
+    for part in free nonfree; do
+        if [[ "${relver}" == "rawhide" ]]; then
+            url="$(dnf -q repoquery --latest-limit=1 --location \
+                --repofrompath="rpmfusion-${part}-rawhide-tree,https://download1.rpmfusion.org/${part}/fedora/development/rawhide/Everything/$(uname -m)/os/" \
+                --repo="rpmfusion-${part}-rawhide-tree" \
+                "rpmfusion-${part}-release")"
+            [[ "${url}" == https://*.rpm ]]
+        else
+            url="https://mirrors.rpmfusion.org/${part}/fedora/rpmfusion-${part}-release-${relver}.noarch.rpm"
+        fi
+        release_rpms+=("${url}")
+    done
+    dnf -y install "${release_rpms[@]}"
+
+    # The repo files, wherever the release rpms put them: /etc/yum.repos.d
+    # up to 44, dnf5's vendor directory /usr/share/dnf5/repos.d from 45 on
+    # (RPMFusion's 45-2). Asked of rpm, so the next move cannot turn the
+    # rawhide check below quietly false or the disable at the end into a
+    # glob that matches nothing.
+    local rpmfusion_repos
+    mapfile -t rpmfusion_repos < <(rpm -ql rpmfusion-free-release rpmfusion-nonfree-release | grep '\.repo$')
+    [[ ${#rpmfusion_repos[@]} -gt 0 ]]
 
     # One transaction each: swap cannot take unrelated packages, so the
     # full-ffmpeg swap (which drags the whole libav*-free set with
@@ -118,7 +144,7 @@ install_multimedia_stack() {
     # is decided by the repo the release rpms actually configured, not by
     # releasever: a pre-branch "45" base IS rawhide (releasever 46), and
     # only the repo id tells the truth for both.
-    if grep -qs '^\[rpmfusion-free-rawhide\]' /etc/yum.repos.d/rpmfusion-free*.repo; then
+    if grep -qs '^\[rpmfusion-free-rawhide\]' "${rpmfusion_repos[@]}"; then
         dnf -y install mesa-va-drivers-freeworld || \
             echo "::warning::mesa-va-drivers-freeworld does not resolve against this rawhide compose (RPMFusion built for a newer mesa); no VA-API hardware decode in this build"
     else
@@ -138,7 +164,7 @@ install_multimedia_stack() {
     # Disable by file, not by repo id: the ids differ per branch (rpmfusion-free
     # and -free-updates on a branched release, rpmfusion-free-rawhide on
     # rawhide), and a named setopt quietly misses whichever set is absent.
-    sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/rpmfusion-*.repo
+    sed -i 's/^enabled=1/enabled=0/' "${rpmfusion_repos[@]}"
 }
 
 # End-of-build cleanup for a plain Silverblue base: /boot must be empty (the
