@@ -82,6 +82,15 @@ install_multimedia_stack() {
         "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${relver}.noarch.rpm" \
         "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${relver}.noarch.rpm"
 
+    # The repo files, wherever the release rpms put them: /etc/yum.repos.d
+    # up to 44, dnf5's vendor directory /usr/share/dnf5/repos.d from 45 on
+    # (RPMFusion's 45-2). Asked of rpm, so the next move cannot turn the
+    # rawhide check below quietly false or the disable at the end into a
+    # glob that matches nothing.
+    local rpmfusion_repos
+    mapfile -t rpmfusion_repos < <(rpm -ql rpmfusion-free-release rpmfusion-nonfree-release | grep '\.repo$')
+    [[ ${#rpmfusion_repos[@]} -gt 0 ]]
+
     # One transaction each: swap cannot take unrelated packages, so the
     # full-ffmpeg swap (which drags the whole libav*-free set with
     # --allowerasing) runs first, the additions after.
@@ -118,7 +127,7 @@ install_multimedia_stack() {
     # is decided by the repo the release rpms actually configured, not by
     # releasever: a pre-branch "45" base IS rawhide (releasever 46), and
     # only the repo id tells the truth for both.
-    if grep -qs '^\[rpmfusion-free-rawhide\]' /etc/yum.repos.d/rpmfusion-free*.repo; then
+    if grep -qs '^\[rpmfusion-free-rawhide\]' "${rpmfusion_repos[@]}"; then
         dnf -y install mesa-va-drivers-freeworld || \
             echo "::warning::mesa-va-drivers-freeworld does not resolve against this rawhide compose (RPMFusion built for a newer mesa); no VA-API hardware decode in this build"
     else
@@ -138,7 +147,7 @@ install_multimedia_stack() {
     # Disable by file, not by repo id: the ids differ per branch (rpmfusion-free
     # and -free-updates on a branched release, rpmfusion-free-rawhide on
     # rawhide), and a named setopt quietly misses whichever set is absent.
-    sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/rpmfusion-*.repo
+    sed -i 's/^enabled=1/enabled=0/' "${rpmfusion_repos[@]}"
 }
 
 # End-of-build cleanup for a plain Silverblue base: /boot must be empty (the
