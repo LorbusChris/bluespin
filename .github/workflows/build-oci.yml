@@ -278,3 +278,27 @@ jobs:
               exit 1
             }
           done
+
+      # A bluespin leg that published records what it published, as a
+      # one-day artifact of this run: the manifest job restitches only
+      # the branches whose legs all left one.
+      - name: Record the published digest
+        if: inputs.platform == 'bluespin' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Named for the leg, so any number of records download side
+          # by side into one directory
+          mkdir -p /tmp/published
+          printf '%s\n' "${DIGEST}" > "/tmp/published/${IMAGE_TAG}"
+
+      - name: Upload the published digest
+        if: inputs.platform == 'bluespin' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: published-bluespin-${{ inputs.fedora_branch }}${{ inputs.tag_suffix }}
+          path: /tmp/published/${{ inputs.fedora_branch }}${{ inputs.tag_suffix }}
+          retention-days: 1
+          # A re-run of a leg that already published replaces its record
+          overwrite: true
