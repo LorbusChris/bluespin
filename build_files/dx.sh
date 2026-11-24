@@ -206,7 +206,7 @@ dnf -y copr disable lorbus/NetworkManager
 # renovate.json5) and the checksum mismatch that follows is the loud
 # reminder to update the hash from the release's cosign_checksums.txt.
 # renovate: datasource=github-releases depName=sigstore/cosign
-COSIGN_VERSION=v3.1.4
+COSIGN_VERSION=v3.1.5
 COSIGN_RPM_SHA256=02fd4fe524932ccba09f7762fce76be35e5570d2023a1093cce776eefc6b62df
 cosign_rpm="$(mktemp -d)/cosign.rpm"
 curl -fsSL --retry 3 -o "${cosign_rpm}" \
