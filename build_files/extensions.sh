@@ -75,7 +75,7 @@ GRADIA_INTEGRATION_UPSTREAM_COMMIT=0b7e47e1e5c1e68e234e4d2d24b307e1da1d18a9
 # last main commit that declared 50, with no Renovate line to bump it off it.
 MOSAICWM_50_COMMIT=d6c7804de4a84aca428ca27df565eee68761e6ab
 # renovate: datasource=git-refs depName=https://github.com/CleoMenezesJr/MosaicWM branch=main
-MOSAICWM_51_COMMIT=376ace19c63072c4ec666a8bf4b415d5ab0d7fec
+MOSAICWM_51_COMMIT=f90337d20a8e7759af622f20723d2dc11af1d733
 
 # renovate: datasource=git-refs depName=https://gitlab.com/lorbus42/NekoTorch branch=master
 NEKOTORCH_COMMIT=9a76e88d7ded4c587a5ac88b47fe607e5803c77a
